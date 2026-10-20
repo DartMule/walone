@@ -28,6 +28,7 @@ class StatisticsPage extends StatelessWidget {
     backgroundColor: Colors.transparent,
     appBar: AppBar(
       title: const Text('Статистика'),
+      actionsPadding: const EdgeInsets.only(right: WaloneDesign.pagePadding),
       actions: [
         IconButton(
           tooltip: 'Настроить статистику',
