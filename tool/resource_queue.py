@@ -46,6 +46,11 @@ def main():
                 os.killpg(child.pid, signum)
             except ProcessLookupError:
                 pass
+            except PermissionError:
+                # На CI группа уже завершившейся команды может быть недоступна.
+                # Ошибку остановки ещё работающей команды сохраняем.
+                if child.poll() is None:
+                    raise
 
         for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
             signal.signal(signum, forward)
