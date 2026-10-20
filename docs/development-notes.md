@@ -528,13 +528,13 @@ python3 tool/audio/check-atmosphere-clips.py
 
 ## Локальная установка macOS
 
-Иконка клавиши со звуковой волной перенесена из нативного приложения.
+Иконка — персиковая W-волна на тёмном сливовом фоне.
 Векторный исходник — `tool/app_icon.swift`; PNG всех размеров находятся
 в `macos/Runner/Assets.xcassets/AppIcon.appiconset` и включаются Xcode в сборку.
 При изменении исходника пересоздайте их из этой папки:
 
 ```sh
-xcrun swift tool/app_icon.swift macos/Runner/Assets.xcassets/AppIcon.appiconset
+xcrun swift tool/app_icon.swift macos/Runner/Assets.xcassets/AppIcon.appiconset windows/runner/resources/app_icon.ico
 ```
 
 Завершите установленную Walone. Из этой папки через общую очередь:
