@@ -22,57 +22,34 @@ func render(size: Int) -> Data {
     let transform = AffineTransform(scale: CGFloat(size) / 1024)
     (transform as NSAffineTransform).concat()
 
-    let tile = rounded(NSRect(x: 64, y: 64, width: 896, height: 896), radius: 202)
+    // The entire tile is an ivory keycap, with a shallow warm-gray lower edge.
+    let body = rounded(NSRect(x: 64, y: 64, width: 896, height: 896), radius: 202)
     NSGraphicsContext.saveGraphicsState()
-    let tileShadow = NSShadow()
-    tileShadow.shadowColor = NSColor.black.withAlphaComponent(0.18)
-    tileShadow.shadowOffset = NSSize(width: 0, height: -14)
-    tileShadow.shadowBlurRadius = 20
-    tileShadow.set()
-    color(0.18, 0.11, 0.18).setFill()
-    tile.fill()
+    let shadow = NSShadow()
+    shadow.shadowColor = NSColor.black.withAlphaComponent(0.18)
+    shadow.shadowOffset = NSSize(width: 0, height: -12)
+    shadow.shadowBlurRadius = 20
+    shadow.set()
+    color(0.79, 0.77, 0.72).setFill()
+    body.fill()
     NSGraphicsContext.restoreGraphicsState()
-    NSGradient(starting: color(0.30, 0.19, 0.29), ending: color(0.16, 0.11, 0.17))!
-        .draw(in: tile, angle: -65)
+    NSGradient(starting: color(0.88, 0.86, 0.81), ending: color(0.76, 0.74, 0.69))!
+        .draw(in: body, angle: -90)
 
-    // A continuous W-shaped wave, with round ends and two balanced valleys.
-    let wave = NSBezierPath()
-    wave.move(to: NSPoint(x: 218, y: 624))
-    wave.curve(to: NSPoint(x: 356, y: 406),
-               controlPoint1: NSPoint(x: 272, y: 568),
-               controlPoint2: NSPoint(x: 292, y: 406))
-    wave.curve(to: NSPoint(x: 512, y: 558),
-               controlPoint1: NSPoint(x: 420, y: 406),
-               controlPoint2: NSPoint(x: 452, y: 558))
-    wave.curve(to: NSPoint(x: 668, y: 406),
-               controlPoint1: NSPoint(x: 572, y: 558),
-               controlPoint2: NSPoint(x: 604, y: 406))
-    wave.curve(to: NSPoint(x: 806, y: 624),
-               controlPoint1: NSPoint(x: 732, y: 406),
-               controlPoint2: NSPoint(x: 752, y: 568))
-    wave.lineWidth = 112
-    wave.lineCapStyle = .round
-    wave.lineJoinStyle = .round
-    NSGraphicsContext.saveGraphicsState()
-    let waveShadow = NSShadow()
-    waveShadow.shadowColor = NSColor.black.withAlphaComponent(0.28)
-    waveShadow.shadowOffset = NSSize(width: 0, height: -8)
-    waveShadow.shadowBlurRadius = 10
-    waveShadow.set()
-    color(1, 0.72, 0.52).setStroke()
-    wave.stroke()
-    NSGraphicsContext.restoreGraphicsState()
-    // Clip a subtle peach gradient to the stroke without raster source artwork.
-    NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current!.cgContext.addPath(wave.cgPath)
-    NSGraphicsContext.current!.cgContext.setLineWidth(112)
-    NSGraphicsContext.current!.cgContext.setLineCap(.round)
-    NSGraphicsContext.current!.cgContext.setLineJoin(.round)
-    NSGraphicsContext.current!.cgContext.replacePathWithStrokedPath()
-    NSGraphicsContext.current!.cgContext.clip()
-    NSGradient(starting: color(1, 0.87, 0.67), ending: color(0.98, 0.64, 0.43))!
-        .draw(in: NSRect(x: 160, y: 348, width: 704, height: 334), angle: -90)
-    NSGraphicsContext.restoreGraphicsState()
+    let face = rounded(NSRect(x: 64, y: 150, width: 896, height: 810), radius: 202)
+    NSGradient(starting: color(0.98, 0.96, 0.92), ending: color(0.90, 0.88, 0.83))!
+        .draw(in: face, angle: -90)
+    NSColor.white.withAlphaComponent(0.45).setStroke()
+    face.lineWidth = 2
+    face.stroke()
+
+    // Five charcoal sound bars remain legible at small sizes and match the tray.
+    let heights: [CGFloat] = [140, 280, 420, 280, 140]
+    color(0.24, 0.22, 0.21).setFill()
+    for (index, height) in heights.enumerated() {
+        rounded(NSRect(x: 257 + CGFloat(index) * 110, y: 550 - height / 2,
+                       width: 70, height: height), radius: 35).fill()
+    }
     NSGraphicsContext.restoreGraphicsState()
     return bitmap.representation(using: .png, properties: [:])!
 }

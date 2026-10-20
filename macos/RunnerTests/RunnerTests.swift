@@ -124,8 +124,8 @@ class RunnerTests: XCTestCase {
       XCTAssertNotNil(image.tiffRepresentation)
     }
     XCTAssertNotEqual(quiet.tiffRepresentation, loud.tiffRepresentation)
-    let legacy = DesktopBridge.musicTrayImage([2.0/12, 7.0/12, 1, 7.0/12, 2.0/12])
-    XCTAssertNotEqual(idle.tiffRepresentation, legacy.tiffRepresentation)
+    let wave = DesktopBridge.musicTrayImage([2.0/12, 7.0/12, 1, 7.0/12, 2.0/12])
+    XCTAssertEqual(idle.tiffRepresentation, wave.tiffRepresentation)
   }
 
   func testTransientAudioFailureDoesNotDisableKeysAndNextKeyRecovers() {

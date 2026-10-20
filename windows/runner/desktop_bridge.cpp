@@ -168,7 +168,7 @@ void DesktopBridge::UpdateMusicTray(const flutter::EncodableValue* value) {
         for (int y = 0; y < size; ++y) for (int x = 0; x < size; ++x) {
           const double dx = x + 0.5 - center;
           const double dy = std::max(0.0, std::abs(y + 0.5 - size / 2.0) - height / 2 + radius);
-          if (dx * dx + dy * dy <= radius * radius) data[y * size + x] = 0xFFFFAD32;
+          if (dx * dx + dy * dy <= radius * radius) data[y * size + x] = 0xFFF0E5D5;
         }
       }
       ICONINFO info{};

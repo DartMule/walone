@@ -263,29 +263,13 @@ class DesktopBridge: NSObject, NSMenuDelegate {
   static func musicTrayImage(_ bars: [Double]?) -> NSImage {
     let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
       NSColor.black.set()
-      if let bars = bars {
-        for (index, level) in bars.enumerated() {
-          let height = 3 + 12 * level
-          NSBezierPath(roundedRect: NSRect(x: 0.8 + Double(index) * 3.5,
-                                         y: (18 - height) / 2, width: 2.4, height: height),
-                       xRadius: 1.2, yRadius: 1.2).fill()
-        }
-      } else {
-        // Тот же W-образный знак, что и в tool/app_icon.swift, без подложки.
-        let wave = NSBezierPath()
-        wave.move(to: NSPoint(x: 1.8, y: 12.5))
-        wave.curve(to: NSPoint(x: 5.2, y: 5.5),
-                   controlPoint1: NSPoint(x: 3.1, y: 10.8), controlPoint2: NSPoint(x: 3.6, y: 5.5))
-        wave.curve(to: NSPoint(x: 9, y: 10.4),
-                   controlPoint1: NSPoint(x: 6.7, y: 5.5), controlPoint2: NSPoint(x: 7.5, y: 10.4))
-        wave.curve(to: NSPoint(x: 12.8, y: 5.5),
-                   controlPoint1: NSPoint(x: 10.5, y: 10.4), controlPoint2: NSPoint(x: 11.3, y: 5.5))
-        wave.curve(to: NSPoint(x: 16.2, y: 12.5),
-                   controlPoint1: NSPoint(x: 14.4, y: 5.5), controlPoint2: NSPoint(x: 14.9, y: 10.8))
-        wave.lineWidth = 2.4
-        wave.lineCapStyle = .round
-        wave.lineJoinStyle = .round
-        wave.stroke()
+      // В покое — тот же знак из пяти полос, что и на светлой клавише приложения.
+      let levels = bars ?? [2.0/12, 7.0/12, 1, 7.0/12, 2.0/12]
+      for (index, level) in levels.enumerated() {
+        let height = 3 + 12 * level
+        NSBezierPath(roundedRect: NSRect(x: 0.8 + Double(index) * 3.5,
+                                       y: (18 - height) / 2, width: 2.4, height: height),
+                     xRadius: 1.2, yRadius: 1.2).fill()
       }
       return true
     }
