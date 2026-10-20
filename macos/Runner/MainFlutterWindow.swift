@@ -87,7 +87,7 @@ class MainFlutterWindow: NSWindow, NSWindowDelegate {
 }
 
 // Системное меню и автозапуск используют то же состояние, что и Flutter-интерфейс.
-class DesktopBridge: NSObject {
+class DesktopBridge: NSObject, NSMenuDelegate {
   private weak var window: NSWindow?
   private let channel: FlutterMethodChannel
   private let appearanceChannel: FlutterMethodChannel
@@ -100,6 +100,11 @@ class DesktopBridge: NSObject {
   private var playerLoading = false
   var trayMenu: NSMenu? { item?.menu }
   private var timerEntry: NSMenuItem?
+  private var menuTracking = false
+  private var volumes: [String: Double] = ["master": 0.7, "music": 0.7, "atmosphere": 1, "keyboard": 0.35]
+  private var keyboardVolumeEnabled = false
+  private var volumeSliders: [String: NSSlider] = [:]
+  private var volumeLabels: [String: NSTextField] = [:]
   private var paused = false
   private var running = false
   private var presets: [[String: String]] = []
@@ -183,6 +188,18 @@ class DesktopBridge: NSObject {
         if rebuild { self.rebuildMenu() }
         else { self.timerEntry?.title = title }
         result(nil)
+      case "updateVolumes":
+        guard let data = call.arguments as? [String: Any],
+              ["master", "music", "atmosphere", "keyboard"].allSatisfy({ key in
+                guard let value = data[key] as? Double else { return false }
+                return value.isFinite && (0...1).contains(value)
+              }) else {
+          result(FlutterError(code: "arguments", message: "Ожидаются уровни громкости от 0 до 1", details: nil)); return
+        }
+        for key in volumes.keys { volumes[key] = data[key] as? Double }
+        keyboardVolumeEnabled = data["keyboardEnabled"] as? Bool ?? false
+        updateVolumeSliders()
+        result(nil)
       case "updatePlayerTray":
         guard let data = call.arguments as? [String: Any] else {
           result(FlutterError(code: "arguments", message: "Ожидается состояние плеера", details: nil)); return
@@ -244,13 +261,31 @@ class DesktopBridge: NSObject {
   }
 
   static func musicTrayImage(_ bars: [Double]?) -> NSImage {
-    let heights = bars?.map { 3 + 12 * $0 } ?? [5.0, 10.0, 15.0, 10.0, 5.0]
     let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-      NSColor.black.setFill()
-      for (index, height) in heights.enumerated() {
-        NSBezierPath(roundedRect: NSRect(x: 0.8 + Double(index) * 3.5,
-                                       y: (18 - height) / 2, width: 2.4, height: height),
-                     xRadius: 1.2, yRadius: 1.2).fill()
+      NSColor.black.set()
+      if let bars = bars {
+        for (index, level) in bars.enumerated() {
+          let height = 3 + 12 * level
+          NSBezierPath(roundedRect: NSRect(x: 0.8 + Double(index) * 3.5,
+                                         y: (18 - height) / 2, width: 2.4, height: height),
+                       xRadius: 1.2, yRadius: 1.2).fill()
+        }
+      } else {
+        // Тот же W-образный знак, что и в tool/app_icon.swift, без подложки.
+        let wave = NSBezierPath()
+        wave.move(to: NSPoint(x: 1.8, y: 12.5))
+        wave.curve(to: NSPoint(x: 5.2, y: 5.5),
+                   controlPoint1: NSPoint(x: 3.1, y: 10.8), controlPoint2: NSPoint(x: 3.6, y: 5.5))
+        wave.curve(to: NSPoint(x: 9, y: 10.4),
+                   controlPoint1: NSPoint(x: 6.7, y: 5.5), controlPoint2: NSPoint(x: 7.5, y: 10.4))
+        wave.curve(to: NSPoint(x: 12.8, y: 5.5),
+                   controlPoint1: NSPoint(x: 10.5, y: 10.4), controlPoint2: NSPoint(x: 11.3, y: 5.5))
+        wave.curve(to: NSPoint(x: 16.2, y: 12.5),
+                   controlPoint1: NSPoint(x: 14.4, y: 5.5), controlPoint2: NSPoint(x: 14.9, y: 10.8))
+        wave.lineWidth = 2.4
+        wave.lineCapStyle = .round
+        wave.lineJoinStyle = .round
+        wave.stroke()
       }
       return true
     }
@@ -258,13 +293,68 @@ class DesktopBridge: NSObject {
     return image
   }
 
+  func menuWillOpen(_ menu: NSMenu) { menuTracking = true }
+
+  func menuDidClose(_ menu: NSMenu) {
+    menuTracking = false
+    rebuildMenu()
+  }
+
+  private func updateVolumeSliders() {
+    for (key, slider) in volumeSliders {
+      slider.doubleValue = volumes[key] ?? 0
+      slider.isEnabled = key != "keyboard" || keyboardVolumeEnabled
+      volumeLabels[key]?.stringValue = "\(Int((slider.doubleValue * 100).rounded())) %"
+    }
+  }
+
+  @objc private func changeVolume(_ sender: NSSlider) {
+    guard let key = sender.identifier?.rawValue else { return }
+    volumes[key] = sender.doubleValue
+    updateVolumeSliders()
+    channel.invokeMethod("action", arguments: [
+      "action": "volume", "channel": key, "value": sender.doubleValue,
+    ])
+  }
+
   private func rebuildMenu() {
+    // Не заменяем меню под курсором во время перетаскивания ползунка.
+    if menuTracking { return }
     let menu = NSMenu()
+    menu.delegate = self
+    volumeSliders.removeAll()
+    volumeLabels.removeAll()
     timerEntry = nil
     let open = NSMenuItem(title: "Открыть", action: #selector(performAction(_:)), keyEquivalent: "")
     open.target = self
     open.representedObject = "open"
     menu.addItem(open)
+    menu.addItem(.separator())
+    for (key, title) in [("master", "Общая громкость"), ("music", "Музыка"),
+                         ("atmosphere", "Атмосфера"), ("keyboard", "Клавиатура")] {
+      let view = NSView(frame: NSRect(x: 0, y: 0, width: 280, height: 54))
+      let label = NSTextField(labelWithString: title)
+      label.frame = NSRect(x: 16, y: 30, width: 194, height: 18)
+      let value = NSTextField(labelWithString: "")
+      value.frame = NSRect(x: 210, y: 30, width: 54, height: 18)
+      value.alignment = .right
+      value.textColor = .secondaryLabelColor
+      let slider = NSSlider(value: volumes[key] ?? 0, minValue: 0, maxValue: 1,
+                            target: self, action: #selector(changeVolume(_:)))
+      slider.frame = NSRect(x: 16, y: 6, width: 248, height: 24)
+      slider.identifier = NSUserInterfaceItemIdentifier(key)
+      slider.isContinuous = true
+      slider.setAccessibilityLabel(title == "Общая громкость" ? title : "Громкость: " + title)
+      view.addSubview(label)
+      view.addSubview(value)
+      view.addSubview(slider)
+      let entry = NSMenuItem()
+      entry.view = view
+      menu.addItem(entry)
+      volumeSliders[key] = slider
+      volumeLabels[key] = value
+    }
+    updateVolumeSliders()
     menu.addItem(.separator())
     let music = NSMenuItem(title: playerTitle.isEmpty ? "Моя музыка…" : playerTitle,
                            action: #selector(performAction(_:)), keyEquivalent: "")

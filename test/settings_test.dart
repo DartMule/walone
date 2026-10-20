@@ -39,6 +39,8 @@ void main() {
     String? id,
     String? version,
     bool? ready,
+    String? volumeChannel,
+    double? value,
   }) async {
     final done = Completer<void>();
     ServicesBinding.instance.channelBuffers.push(
@@ -49,6 +51,8 @@ void main() {
           'id': id,
           'version': version,
           'ready': ready,
+          'channel': volumeChannel,
+          'value': value,
         }),
       ),
       (reply) {
@@ -125,6 +129,36 @@ void main() {
     await root.delete(recursive: true);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+  });
+
+  test('Громкость трея и плеера синхронизируется в обе стороны', () async {
+    Future<Map<Object?, Object?>> volumes() async {
+      await Future<void>.delayed(Duration.zero);
+      return calls.lastWhere((call) => call.method == 'updateVolumes').arguments
+          as Map<Object?, Object?>;
+    }
+
+    for (final key in ['master', 'music', 'atmosphere', 'keyboard']) {
+      await action('volume', volumeChannel: key, value: 0.24);
+      expect((await volumes())[key], 0.24);
+    }
+    expect(atmosphere.state.master, 0.24);
+    expect(music.state.library.volume, 0.24);
+    expect(atmosphere.state.backgroundVolume, 0.24);
+    expect(keyboard.state.volume, 0.24);
+
+    await atmosphere.setMaster(0.62);
+    await music.configure(volume: 0.63);
+    await atmosphere.setBackgroundVolume(0.64);
+    await keyboard.configure(volume: 0.65);
+    expect(await volumes(), containsPair('master', 0.62));
+    expect(await volumes(), containsPair('music', 0.63));
+    expect(await volumes(), containsPair('atmosphere', 0.64));
+    expect(await volumes(), containsPair('keyboard', 0.65));
+    await action('volume', volumeChannel: 'master', value: double.nan);
+    expect(atmosphere.state.master, 0.62);
+    await action('volume', volumeChannel: 'master', value: 2);
+    expect(atmosphere.state.master, 1);
   });
 
   for (final brightness in Brightness.values) {
@@ -283,7 +317,7 @@ void main() {
   test('Плеер трея управляет музыкой и обновляет название и паузу', () async {
     Map<dynamic, dynamic> snapshot() =>
         calls.lastWhere((call) => call.method == 'updatePlayerTray').arguments
-            as Map;
+            as Map<Object?, Object?>;
     expect(snapshot()['available'], isFalse);
     final tracks = [
       for (var index = 0; index < 2; index++)
@@ -336,7 +370,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     Map<dynamic, dynamic> snapshot() =>
         calls.lastWhere((call) => call.method == 'updateTimerTray').arguments
-            as Map;
+            as Map<Object?, Object?>;
     expect(snapshot()['title'], contains('Рабочая сессия'));
     expect(snapshot()['running'], isTrue);
     await action('toggleTimer');

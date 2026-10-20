@@ -85,6 +85,35 @@ class RunnerTests: XCTestCase {
     XCTAssertNil(entry("resetTimer"))
   }
 
+  func testTrayVolumesUpdateWithoutReplacingTrackedMenu() {
+    let controller = FlutterViewController()
+    let window = NSWindow(contentViewController: controller)
+    let bridge = DesktopBridge(window: window, controller: controller)
+    defer { window.orderOut(nil) }
+    let menu = bridge.trayMenu!
+    let sliders = menu.items.compactMap { item in
+      item.view?.subviews.compactMap { $0 as? NSSlider }.first
+    }
+    XCTAssertEqual(sliders.count, 4)
+    bridge.menuWillOpen(menu)
+    bridge.handle(FlutterMethodCall(methodName: "updateVolumes", arguments: [
+      "master": 0.2, "music": 0.3, "atmosphere": 0.4, "keyboard": 0.5,
+      "keyboardEnabled": true,
+    ])) { XCTAssertNil($0) }
+    XCTAssertEqual(sliders.map { $0.doubleValue }, [0.2, 0.3, 0.4, 0.5])
+    XCTAssertTrue(sliders.allSatisfy { $0.isEnabled && $0.isContinuous })
+    bridge.handle(FlutterMethodCall(methodName: "updateTray", arguments: ["paused": true])) {
+      XCTAssertNil($0)
+    }
+    XCTAssertTrue(bridge.trayMenu === menu)
+    sliders[1].doubleValue = 0.8
+    XCTAssertTrue(NSApp.sendAction(sliders[1].action!, to: sliders[1].target, from: sliders[1]))
+    bridge.menuDidClose(menu)
+    let music = bridge.trayMenu!.items.compactMap { $0.view?.subviews.compactMap { $0 as? NSSlider }.first }
+      .first { $0.identifier?.rawValue == "music" }
+    XCTAssertEqual(music?.doubleValue, 0.8)
+  }
+
   func testMusicTrayImagesKeepTemplateAndGeometry() {
     let idle = DesktopBridge.musicTrayImage(nil)
     let quiet = DesktopBridge.musicTrayImage([0, 0, 0, 0, 0])
@@ -95,6 +124,8 @@ class RunnerTests: XCTestCase {
       XCTAssertNotNil(image.tiffRepresentation)
     }
     XCTAssertNotEqual(quiet.tiffRepresentation, loud.tiffRepresentation)
+    let legacy = DesktopBridge.musicTrayImage([2.0/12, 7.0/12, 1, 7.0/12, 2.0/12])
+    XCTAssertNotEqual(idle.tiffRepresentation, legacy.tiffRepresentation)
   }
 
   func testTransientAudioFailureDoesNotDisableKeysAndNextKeyRecovers() {

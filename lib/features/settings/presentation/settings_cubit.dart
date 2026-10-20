@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../atmosphere/presentation/atmosphere_cubit.dart';
 import '../../music/presentation/music_cubit.dart';
+import '../../keyboard/presentation/keyboard_cubit.dart';
 import '../../timer/presentation/timer_cubit.dart';
 
 enum LoginStatus { disabled, enabled, requiresApproval, notFound }
@@ -43,6 +44,8 @@ class SettingsCubit extends Cubit<SettingsState> {
   (String?, bool, bool, bool)? _lastPlayerTray;
   final MethodChannel channel;
   StreamSubscription<AtmosphereState>? _subscription;
+  StreamSubscription<KeyboardState>? _keyboardSubscription;
+  (double, double, double, double, bool)? _lastVolumes;
   Future<void> _trayTail = Future.value();
   Future<void>? _musicTrayUpdate;
   bool _musicTrayPending = false;
@@ -64,6 +67,22 @@ class SettingsCubit extends Cubit<SettingsState> {
               updateReady: args['ready'] == true,
             ),
           );
+        case 'volume':
+          final value = args['value'];
+          if (value is! num || !value.isFinite) return false;
+          final volume = value.toDouble().clamp(0.0, 1.0);
+          switch (args['channel']) {
+            case 'master':
+              await atmosphere.setMaster(volume);
+            case 'music':
+              await atmosphere.music.configure(volume: volume);
+            case 'atmosphere':
+              await atmosphere.setBackgroundVolume(volume);
+            case 'keyboard':
+              await atmosphere.keyboard.configure(volume: volume);
+            default:
+              return false;
+          }
         case 'togglePause':
           if (atmosphere.state.paused) {
             await atmosphere.resume();
@@ -107,9 +126,19 @@ class SettingsCubit extends Cubit<SettingsState> {
     });
     await _read('initialize');
     if (isClosed) return;
-    _subscription = atmosphere.stream.listen(_updateTray);
+    _subscription = atmosphere.stream.listen((value) {
+      _updateTray(value);
+      _updateVolumes();
+    });
     await _updateTray(atmosphere.state);
-    _playerSubscription = atmosphere.music.stream.listen(_updatePlayerTray);
+    _playerSubscription = atmosphere.music.stream.listen((value) {
+      _updatePlayerTray(value);
+      _updateVolumes();
+    });
+    _keyboardSubscription = atmosphere.keyboard.stream.listen((_) {
+      _updateVolumes();
+    });
+    await _updateVolumes();
     await _updatePlayerTray(atmosphere.music.state);
     atmosphere.music.visualization.addListener(_updateMusicTray);
     atmosphere.music.setTrayVisualizationEnabled(true);
@@ -118,6 +147,36 @@ class SettingsCubit extends Cubit<SettingsState> {
       _timerSubscription = timer.stream.listen(_updateTimerTray);
       await _updateTimerTray(timer.state);
     }
+  }
+
+  Future<void> _updateVolumes() {
+    final snapshot = (
+      atmosphere.state.master,
+      atmosphere.music.state.library.volume,
+      atmosphere.state.backgroundVolume,
+      atmosphere.keyboard.state.volume,
+      !atmosphere.keyboard.state.busy &&
+          atmosphere.keyboard.state.selected != null,
+    );
+    if (_lastVolumes == snapshot) return _trayTail;
+    _lastVolumes = snapshot;
+    _trayTail = _trayTail.then((_) async {
+      if (isClosed) return;
+      try {
+        await channel.invokeMethod<void>('updateVolumes', {
+          'master': snapshot.$1,
+          'music': snapshot.$2,
+          'atmosphere': snapshot.$3,
+          'keyboard': snapshot.$4,
+          'keyboardEnabled': snapshot.$5,
+        });
+      } on MissingPluginException {
+        // Нативные ползунки доступны в меню macOS.
+      } catch (error) {
+        if (!isClosed) _publish(error: '$error');
+      }
+    });
+    return _trayTail;
   }
 
   Future<void> _updatePlayerTray(MusicState value) {
@@ -274,6 +333,7 @@ class SettingsCubit extends Cubit<SettingsState> {
     await _subscription?.cancel();
     await _timerSubscription?.cancel();
     await _playerSubscription?.cancel();
+    await _keyboardSubscription?.cancel();
     await _trayTail;
     return super.close();
   }
