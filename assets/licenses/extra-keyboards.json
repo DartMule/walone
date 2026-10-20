@@ -1,0 +1,1030 @@
+[
+  {
+    "id": "hhkb-hybrid",
+    "files": [
+      {
+        "file": "hhkb-hybrid.mp3",
+        "url": "https://cdn.freesound.org/previews/546/546164_12206738-lq.mp3",
+        "source": "https://freesound.org/people/grcekh/sounds/546164/",
+        "author": "grcekh",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "151aafe0f344e69e393e93fc9787506abcb7da9319121d1c766a12afd51e782f",
+        "title": "Keyboard Typing 7 (HHKB, Topre) by grcekh"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "hhkb-hybrid.mp3",
+        "start": 56.185,
+        "end": 56.35
+      },
+      "key1": {
+        "file": "hhkb-hybrid.mp3",
+        "start": 57.22,
+        "end": 57.45
+      },
+      "key2": {
+        "file": "hhkb-hybrid.mp3",
+        "start": 58.025,
+        "end": 58.2
+      },
+      "key3": {
+        "file": "hhkb-hybrid.mp3",
+        "start": 59.145,
+        "end": 59.44
+      },
+      "key4": {
+        "file": "hhkb-hybrid.mp3",
+        "start": 60.08,
+        "end": 60.25
+      },
+      "key5": {
+        "file": "hhkb-hybrid.mp3",
+        "start": 61.45,
+        "end": 61.58
+      },
+      "space": {
+        "file": "hhkb-hybrid.mp3",
+        "start": 56.185,
+        "end": 56.35
+      },
+      "enter": {
+        "file": "hhkb-hybrid.mp3",
+        "start": 57.22,
+        "end": 57.45
+      },
+      "backspace": {
+        "file": "hhkb-hybrid.mp3",
+        "start": 58.025,
+        "end": 58.2
+      }
+    }
+  },
+  {
+    "id": "whitefox",
+    "files": [
+      {
+        "file": "whitefox.mp3",
+        "url": "https://cdn.freesound.org/previews/546/546167_12206738-lq.mp3",
+        "source": "https://freesound.org/people/grcekh/sounds/546167/",
+        "author": "grcekh",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "c4d2a29c4b97535c4ed80e0a365920f65f5cc71ecfa128adb954e3f984349b5c",
+        "title": "Keyboard Typing 10 (WhiteFox, Mechanical) by grcekh"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "whitefox.mp3",
+        "start": 160.78,
+        "end": 160.87
+      },
+      "key1": {
+        "file": "whitefox.mp3",
+        "start": 162.51,
+        "end": 162.58
+      },
+      "key2": {
+        "file": "whitefox.mp3",
+        "start": 163.79,
+        "end": 163.86
+      },
+      "key3": {
+        "file": "whitefox.mp3",
+        "start": 164.57,
+        "end": 164.69
+      },
+      "key4": {
+        "file": "whitefox.mp3",
+        "start": 165.13,
+        "end": 165.325
+      },
+      "key5": {
+        "file": "whitefox.mp3",
+        "start": 165.63,
+        "end": 165.78
+      },
+      "space": {
+        "file": "whitefox.mp3",
+        "start": 160.78,
+        "end": 160.87
+      },
+      "enter": {
+        "file": "whitefox.mp3",
+        "start": 162.51,
+        "end": 162.58
+      },
+      "backspace": {
+        "file": "whitefox.mp3",
+        "start": 163.79,
+        "end": 163.86
+      }
+    }
+  },
+  {
+    "id": "keychron-k10",
+    "files": [
+      {
+        "file": "keychron-k10.mp3",
+        "url": "https://cdn.freesound.org/previews/789/789628_5287430-lq.mp3",
+        "source": "https://freesound.org/people/Sadiquecat/sounds/789628/",
+        "author": "Sadiquecat",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "78aea85c6061967a16b46769bdd1568aaf2ab32ee1bcaba01be0c66c7d07f401",
+        "title": "Keychron k10 A to + individual keys by Sadiquecat"
+      },
+      {
+        "file": "keychron-space.mp3",
+        "url": "https://cdn.freesound.org/previews/789/789630_5287430-lq.mp3",
+        "source": "https://freesound.org/people/Sadiquecat/sounds/789630/",
+        "author": "Sadiquecat",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "998694df450a9b85d44a7bd4066b5f3a72c4911f938f46c783aff35e5e4b7e4e",
+        "title": "Keychron k10 space_bar by Sadiquecat"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "keychron-k10.mp3",
+        "start": 0.24,
+        "end": 0.37
+      },
+      "key1": {
+        "file": "keychron-k10.mp3",
+        "start": 1.165,
+        "end": 1.285
+      },
+      "key2": {
+        "file": "keychron-k10.mp3",
+        "start": 2.055,
+        "end": 2.175
+      },
+      "key3": {
+        "file": "keychron-k10.mp3",
+        "start": 3,
+        "end": 3.12
+      },
+      "key4": {
+        "file": "keychron-k10.mp3",
+        "start": 3.995,
+        "end": 4.115
+      },
+      "key5": {
+        "file": "keychron-k10.mp3",
+        "start": 4.94,
+        "end": 5.065
+      },
+      "space": {
+        "file": "keychron-space.mp3",
+        "start": 0,
+        "end": 0.3
+      },
+      "enter": {
+        "file": "keychron-k10.mp3",
+        "start": 1.165,
+        "end": 1.285
+      },
+      "backspace": {
+        "file": "keychron-k10.mp3",
+        "start": 2.055,
+        "end": 2.175
+      }
+    }
+  },
+  {
+    "id": "dell-d510",
+    "files": [
+      {
+        "file": "dell-d510.mp3",
+        "url": "https://cdn.freesound.org/previews/854/854746_14675142-lq.mp3",
+        "source": "https://freesound.org/people/justamudkip/sounds/854746/",
+        "author": "justamudkip",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "bf0cfeb3db7198fa4e0124abd610e1090c4c370de922d6785424f4accbfb485f",
+        "title": "Typing on Laptop Keyboard #3 (Slow) by justamudkip"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "dell-d510.mp3",
+        "start": 16.61,
+        "end": 16.735
+      },
+      "key1": {
+        "file": "dell-d510.mp3",
+        "start": 18.515,
+        "end": 18.65
+      },
+      "key2": {
+        "file": "dell-d510.mp3",
+        "start": 33.285,
+        "end": 33.425
+      },
+      "key3": {
+        "file": "dell-d510.mp3",
+        "start": 33.89,
+        "end": 34.025
+      },
+      "key4": {
+        "file": "dell-d510.mp3",
+        "start": 58.965,
+        "end": 59.1
+      },
+      "key5": {
+        "file": "dell-d510.mp3",
+        "start": 62.115,
+        "end": 62.195
+      },
+      "space": {
+        "file": "dell-d510.mp3",
+        "start": 16.61,
+        "end": 16.735
+      },
+      "enter": {
+        "file": "dell-d510.mp3",
+        "start": 18.515,
+        "end": 18.65
+      },
+      "backspace": {
+        "file": "dell-d510.mp3",
+        "start": 33.285,
+        "end": 33.425
+      }
+    }
+  },
+  {
+    "id": "razer-ultimate",
+    "files": [
+      {
+        "file": "razer-ultimate.mp3",
+        "url": "https://cdn.freesound.org/previews/380/380135_3249786-lq.mp3",
+        "source": "https://freesound.org/people/yottasounds/sounds/380135/",
+        "author": "yottasounds",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "12b6791fe060be898b3b70ab9cb1e6a2cb94f40a9a00c30dfaccde51bb71ac43",
+        "title": "Computer Keyboard - typing sounds.wav by yottasounds"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "razer-ultimate.mp3",
+        "start": 3.515,
+        "end": 3.6
+      },
+      "key1": {
+        "file": "razer-ultimate.mp3",
+        "start": 4.095,
+        "end": 4.225
+      },
+      "key2": {
+        "file": "razer-ultimate.mp3",
+        "start": 4.43,
+        "end": 4.525
+      },
+      "key3": {
+        "file": "razer-ultimate.mp3",
+        "start": 5.89,
+        "end": 5.98
+      },
+      "key4": {
+        "file": "razer-ultimate.mp3",
+        "start": 8.465,
+        "end": 8.62
+      },
+      "key5": {
+        "file": "razer-ultimate.mp3",
+        "start": 10,
+        "end": 10.095
+      },
+      "space": {
+        "file": "razer-ultimate.mp3",
+        "start": 3.515,
+        "end": 3.6
+      },
+      "enter": {
+        "file": "razer-ultimate.mp3",
+        "start": 4.095,
+        "end": 4.225
+      },
+      "backspace": {
+        "file": "razer-ultimate.mp3",
+        "start": 4.43,
+        "end": 4.525
+      }
+    }
+  },
+  {
+    "id": "razer-2013",
+    "files": [
+      {
+        "file": "razer-2013.mp3",
+        "url": "https://cdn.freesound.org/previews/348/348238_4067257-lq.mp3",
+        "source": "https://freesound.org/people/newagesoup/sounds/348238/",
+        "author": "newagesoup",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "06c8f686f942243c65b28f65e993cd3d536ba2db785159904a539eef02b629e9",
+        "title": "MECH-KEYBOARD-02.wav by newagesoup"
+      },
+      {
+        "file": "razer-2013-alt.mp3",
+        "url": "https://cdn.freesound.org/previews/348/348239_4067257-lq.mp3",
+        "source": "https://freesound.org/people/newagesoup/sounds/348239/",
+        "author": "newagesoup",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "9cbec684d9cbb56d8105d008fdd6d8165183e41ee012074e721518fb2920d139",
+        "title": "MECH-KEYBOARD-01.wav by newagesoup"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "razer-2013.mp3",
+        "start": 0,
+        "end": 0.18
+      },
+      "key1": {
+        "file": "razer-2013-alt.mp3",
+        "start": 0,
+        "end": 0.18
+      },
+      "space": {
+        "file": "razer-2013.mp3",
+        "start": 0,
+        "end": 0.18
+      },
+      "enter": {
+        "file": "razer-2013-alt.mp3",
+        "start": 0,
+        "end": 0.18
+      },
+      "backspace": {
+        "file": "razer-2013.mp3",
+        "start": 0,
+        "end": 0.18
+      }
+    }
+  },
+  {
+    "id": "razer-tournament",
+    "files": [
+      {
+        "file": "razer-tournament.mp3",
+        "url": "https://cdn.freesound.org/previews/702/702236_1143716-lq.mp3",
+        "source": "https://freesound.org/people/WaveAdventurer/sounds/702236/",
+        "author": "WaveAdventurer",
+        "license": "https://creativecommons.org/licenses/by/4.0/",
+        "sha256": "0946f64782aa0eb9f9e3b42c69a2d6c6fa720dbdd38d2eb6c84dc4492c3fc68a",
+        "title": "Mechanical keyboard typing by WaveAdventurer"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "razer-tournament.mp3",
+        "start": 20.93,
+        "end": 21.065
+      },
+      "key1": {
+        "file": "razer-tournament.mp3",
+        "start": 22.46,
+        "end": 22.61
+      },
+      "key2": {
+        "file": "razer-tournament.mp3",
+        "start": 28.145,
+        "end": 28.265
+      },
+      "key3": {
+        "file": "razer-tournament.mp3",
+        "start": 30.235,
+        "end": 30.37
+      },
+      "key4": {
+        "file": "razer-tournament.mp3",
+        "start": 34.194,
+        "end": 34.373
+      },
+      "key5": {
+        "file": "razer-tournament.mp3",
+        "start": 35.508,
+        "end": 35.664
+      },
+      "space": {
+        "file": "razer-tournament.mp3",
+        "start": 20.93,
+        "end": 21.065
+      },
+      "enter": {
+        "file": "razer-tournament.mp3",
+        "start": 22.46,
+        "end": 22.61
+      },
+      "backspace": {
+        "file": "razer-tournament.mp3",
+        "start": 28.145,
+        "end": 28.265
+      }
+    }
+  },
+  {
+    "id": "corsair-k70",
+    "files": [
+      {
+        "file": "corsair-k70.mp3",
+        "url": "https://cdn.freesound.org/previews/567/567920_10332843-lq.mp3",
+        "source": "https://freesound.org/people/luutoo/sounds/567920/",
+        "author": "luutoo",
+        "license": "https://creativecommons.org/licenses/by/3.0/",
+        "sha256": "26ea408da9c1b33f22a64b51b9b265e00b65d72f5eaae7a5324ebece727fd379",
+        "title": "keyboard typing (1 sentence) by luutoo"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "corsair-k70.mp3",
+        "start": 4.955,
+        "end": 5.108
+      },
+      "key1": {
+        "file": "corsair-k70.mp3",
+        "start": 5.435,
+        "end": 5.651
+      },
+      "key2": {
+        "file": "corsair-k70.mp3",
+        "start": 6.475,
+        "end": 6.694
+      },
+      "key3": {
+        "file": "corsair-k70.mp3",
+        "start": 7.945,
+        "end": 8.063
+      },
+      "key4": {
+        "file": "corsair-k70.mp3",
+        "start": 8.175,
+        "end": 8.235
+      },
+      "key5": {
+        "file": "corsair-k70.mp3",
+        "start": 9.815,
+        "end": 9.872
+      },
+      "space": {
+        "file": "corsair-k70.mp3",
+        "start": 4.955,
+        "end": 5.108
+      },
+      "enter": {
+        "file": "corsair-k70.mp3",
+        "start": 5.435,
+        "end": 5.651
+      },
+      "backspace": {
+        "file": "corsair-k70.mp3",
+        "start": 6.475,
+        "end": 6.694
+      }
+    }
+  },
+  {
+    "id": "corsair-k95-red",
+    "files": [
+      {
+        "file": "corsair-k95-red.mp3",
+        "url": "https://cdn.freesound.org/previews/499/499773_3236898-lq.mp3",
+        "source": "https://freesound.org/people/handygaber/sounds/499773/",
+        "author": "handygaber",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "a7e7bb3b742cfd16e8fcdfc7d9f04566ddb54ab1dfc69822210bbb09a321c21f",
+        "title": "Keyboard clicking typing Cherry Red Mechanical by handygaber"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "corsair-k95-red.mp3",
+        "start": 98.2,
+        "end": 98.425
+      },
+      "key1": {
+        "file": "corsair-k95-red.mp3",
+        "start": 99.705,
+        "end": 99.86
+      },
+      "key2": {
+        "file": "corsair-k95-red.mp3",
+        "start": 101.345,
+        "end": 101.495
+      },
+      "key3": {
+        "file": "corsair-k95-red.mp3",
+        "start": 102.04,
+        "end": 102.175
+      },
+      "key4": {
+        "file": "corsair-k95-red.mp3",
+        "start": 106.675,
+        "end": 106.845
+      },
+      "key5": {
+        "file": "corsair-k95-red.mp3",
+        "start": 109.975,
+        "end": 110.115
+      },
+      "space": {
+        "file": "corsair-k95-red.mp3",
+        "start": 98.2,
+        "end": 98.425
+      },
+      "enter": {
+        "file": "corsair-k95-red.mp3",
+        "start": 99.705,
+        "end": 99.86
+      },
+      "backspace": {
+        "file": "corsair-k95-red.mp3",
+        "start": 101.345,
+        "end": 101.495
+      }
+    }
+  },
+  {
+    "id": "corsair-k95-brown",
+    "files": [
+      {
+        "file": "corsair-k95-brown.mp3",
+        "url": "https://cdn.freesound.org/previews/432/432432_8031495-lq.mp3",
+        "source": "https://freesound.org/people/NickTHH/sounds/432432/",
+        "author": "NickTHH",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "28c502346b71786b2481d396929d678112fb57dca9c67dc272b9b8fa749e074a",
+        "title": "Cherry MX Brown Mechanical Keyboard Sound.mp3 by NickTHH"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "corsair-k95-brown.mp3",
+        "start": 20.515,
+        "end": 20.73
+      },
+      "key1": {
+        "file": "corsair-k95-brown.mp3",
+        "start": 0.79,
+        "end": 0.915
+      },
+      "key2": {
+        "file": "corsair-k95-brown.mp3",
+        "start": 1.08,
+        "end": 1.255
+      },
+      "key3": {
+        "file": "corsair-k95-brown.mp3",
+        "start": 2.4,
+        "end": 2.545
+      },
+      "key4": {
+        "file": "corsair-k95-brown.mp3",
+        "start": 24.295,
+        "end": 24.52
+      },
+      "key5": {
+        "file": "corsair-k95-brown.mp3",
+        "start": 5.985,
+        "end": 6.175
+      },
+      "space": {
+        "file": "corsair-k95-brown.mp3",
+        "start": 20.515,
+        "end": 20.73
+      },
+      "enter": {
+        "file": "corsair-k95-brown.mp3",
+        "start": 0.79,
+        "end": 0.915
+      },
+      "backspace": {
+        "file": "corsair-k95-brown.mp3",
+        "start": 1.08,
+        "end": 1.255
+      }
+    }
+  },
+  {
+    "id": "ducky-miya",
+    "files": [
+      {
+        "file": "ducky-miya.mp3",
+        "url": "https://cdn.freesound.org/previews/757/757638_13041382-lq.mp3",
+        "source": "https://freesound.org/people/eclectic-kitty/sounds/757638/",
+        "author": "eclectic-kitty",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "f3c2e920c064d075e9f91e7bebef41dfe00b28c0abf18ceeec1bb99748ec3338",
+        "title": "Mechanical Keyboard Typing by eclectic-kitty"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "ducky-miya.mp3",
+        "start": 49.555,
+        "end": 49.655
+      },
+      "key1": {
+        "file": "ducky-miya.mp3",
+        "start": 50.795,
+        "end": 50.89
+      },
+      "key2": {
+        "file": "ducky-miya.mp3",
+        "start": 51.133,
+        "end": 51.285
+      },
+      "key3": {
+        "file": "ducky-miya.mp3",
+        "start": 51.83,
+        "end": 52.03
+      },
+      "key4": {
+        "file": "ducky-miya.mp3",
+        "start": 54.845,
+        "end": 54.98
+      },
+      "key5": {
+        "file": "ducky-miya.mp3",
+        "start": 55.494,
+        "end": 55.733
+      },
+      "space": {
+        "file": "ducky-miya.mp3",
+        "start": 49.555,
+        "end": 49.655
+      },
+      "enter": {
+        "file": "ducky-miya.mp3",
+        "start": 50.795,
+        "end": 50.89
+      },
+      "backspace": {
+        "file": "ducky-miya.mp3",
+        "start": 51.133,
+        "end": 51.285
+      }
+    }
+  },
+  {
+    "id": "apple-iie",
+    "files": [
+      {
+        "file": "apple-iie.mp3",
+        "url": "https://cdn.freesound.org/previews/577/577849_7700251-lq.mp3",
+        "source": "https://freesound.org/people/makenoisemusic/sounds/577849/",
+        "author": "makenoisemusic",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "26d9bee3018b99edb00421ffb0e92fb55e1076a0e7c3692d2de1f9b3bc71a367",
+        "title": "Apple IIe Typing Morphagene Reel.wav by makenoisemusic"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "apple-iie.mp3",
+        "start": 10.025,
+        "end": 10.191
+      },
+      "key1": {
+        "file": "apple-iie.mp3",
+        "start": 15.59,
+        "end": 15.712
+      },
+      "key2": {
+        "file": "apple-iie.mp3",
+        "start": 30.57,
+        "end": 30.664
+      },
+      "key3": {
+        "file": "apple-iie.mp3",
+        "start": 42.51,
+        "end": 42.628
+      },
+      "key4": {
+        "file": "apple-iie.mp3",
+        "start": 58.03,
+        "end": 58.118
+      },
+      "key5": {
+        "file": "apple-iie.mp3",
+        "start": 91.69,
+        "end": 91.793
+      },
+      "space": {
+        "file": "apple-iie.mp3",
+        "start": 10.025,
+        "end": 10.191
+      },
+      "enter": {
+        "file": "apple-iie.mp3",
+        "start": 15.59,
+        "end": 15.712
+      },
+      "backspace": {
+        "file": "apple-iie.mp3",
+        "start": 30.57,
+        "end": 30.664
+      }
+    }
+  },
+  {
+    "id": "apple-pro",
+    "files": [
+      {
+        "file": "apple-pro.mp3",
+        "url": "https://cdn.freesound.org/previews/349/349377_1166611-lq.mp3",
+        "source": "https://freesound.org/people/BrodieSound/sounds/349377/",
+        "author": "BrodieSound",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "25bed406d038e436b9491c0171d0bf89e5c3570485a8b5dc3cb561028654f4a4",
+        "title": "Typing.wav by BrodieSound"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "apple-pro.mp3",
+        "start": 2.195,
+        "end": 2.305
+      },
+      "key1": {
+        "file": "apple-pro.mp3",
+        "start": 7.82,
+        "end": 7.97
+      },
+      "key2": {
+        "file": "apple-pro.mp3",
+        "start": 10.555,
+        "end": 10.685
+      },
+      "key3": {
+        "file": "apple-pro.mp3",
+        "start": 10.725,
+        "end": 10.84
+      },
+      "key4": {
+        "file": "apple-pro.mp3",
+        "start": 13.45,
+        "end": 13.57
+      },
+      "key5": {
+        "file": "apple-pro.mp3",
+        "start": 31.82,
+        "end": 31.94
+      },
+      "space": {
+        "file": "apple-pro.mp3",
+        "start": 2.195,
+        "end": 2.305
+      },
+      "enter": {
+        "file": "apple-pro.mp3",
+        "start": 7.82,
+        "end": 7.97
+      },
+      "backspace": {
+        "file": "apple-pro.mp3",
+        "start": 10.555,
+        "end": 10.685
+      }
+    }
+  },
+  {
+    "id": "apple-aluminum",
+    "files": [
+      {
+        "file": "apple-aluminum.mp3",
+        "url": "https://cdn.freesound.org/previews/75/75372_1163166-lq.mp3",
+        "source": "https://freesound.org/people/Tomlija/sounds/75372/",
+        "author": "Tomlija",
+        "license": "https://creativecommons.org/licenses/by/3.0/",
+        "sha256": "63870e2a47943052153c84f43138be2c6b0f552e1d9728216371142f8077312b",
+        "title": "tastatura.aif by Tomlija"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "apple-aluminum.mp3",
+        "start": 0.35,
+        "end": 0.435
+      },
+      "key1": {
+        "file": "apple-aluminum.mp3",
+        "start": 0.84,
+        "end": 0.92
+      },
+      "key2": {
+        "file": "apple-aluminum.mp3",
+        "start": 1.425,
+        "end": 1.505
+      },
+      "key3": {
+        "file": "apple-aluminum.mp3",
+        "start": 2.42,
+        "end": 2.515
+      },
+      "key4": {
+        "file": "apple-aluminum.mp3",
+        "start": 2.96,
+        "end": 3.035
+      },
+      "key5": {
+        "file": "apple-aluminum.mp3",
+        "start": 3.855,
+        "end": 4.015
+      },
+      "space": {
+        "file": "apple-aluminum.mp3",
+        "start": 0.35,
+        "end": 0.435
+      },
+      "enter": {
+        "file": "apple-aluminum.mp3",
+        "start": 0.84,
+        "end": 0.92
+      },
+      "backspace": {
+        "file": "apple-aluminum.mp3",
+        "start": 1.425,
+        "end": 1.505
+      }
+    }
+  },
+  {
+    "id": "microsoft",
+    "files": [
+      {
+        "file": "microsoft.mp3",
+        "url": "https://cdn.freesound.org/previews/546/546369_12222745-lq.mp3",
+        "source": "https://freesound.org/people/PanosA/sounds/546369/",
+        "author": "PanosA",
+        "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sha256": "7ebde629c708f065094ea729b661c0283e069d907e7dd30927e43a4f6e92051d",
+        "title": "Typing on Microsoft keyboard.wav by PanosA"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "microsoft.mp3",
+        "start": 24.405,
+        "end": 24.565
+      },
+      "key1": {
+        "file": "microsoft.mp3",
+        "start": 25.393,
+        "end": 25.542
+      },
+      "key2": {
+        "file": "microsoft.mp3",
+        "start": 25.72,
+        "end": 25.925
+      },
+      "key3": {
+        "file": "microsoft.mp3",
+        "start": 26.215,
+        "end": 26.4
+      },
+      "key4": {
+        "file": "microsoft.mp3",
+        "start": 28.165,
+        "end": 28.335
+      },
+      "key5": {
+        "file": "microsoft.mp3",
+        "start": 30.605,
+        "end": 30.75
+      },
+      "space": {
+        "file": "microsoft.mp3",
+        "start": 24.405,
+        "end": 24.565
+      },
+      "enter": {
+        "file": "microsoft.mp3",
+        "start": 25.393,
+        "end": 25.542
+      },
+      "backspace": {
+        "file": "microsoft.mp3",
+        "start": 25.72,
+        "end": 25.925
+      }
+    }
+  },
+  {
+    "id": "ibm-model-m",
+    "files": [
+      {
+        "file": "1e-0.wav",
+        "url": "https://raw.githubusercontent.com/zevv/bucklespring/43274ed8bca545fde585d73d89086bf9ae5ed1d0/wav/1e-0.wav",
+        "source": "https://github.com/zevv/bucklespring/tree/43274ed8bca545fde585d73d89086bf9ae5ed1d0",
+        "author": "Ico Doornekamp",
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "sha256": "4b16d0c174a9e4d64cda06ab6d9b760e4ad1a69d0140c384ffa57696a37e0537"
+      },
+      {
+        "file": "1f-0.wav",
+        "url": "https://raw.githubusercontent.com/zevv/bucklespring/43274ed8bca545fde585d73d89086bf9ae5ed1d0/wav/1f-0.wav",
+        "source": "https://github.com/zevv/bucklespring/tree/43274ed8bca545fde585d73d89086bf9ae5ed1d0",
+        "author": "Ico Doornekamp",
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "sha256": "f2dc22e920015e3b1c94d81c45148d4d8805cadd30c94e7e6176677c5e5f1878"
+      },
+      {
+        "file": "20-0.wav",
+        "url": "https://raw.githubusercontent.com/zevv/bucklespring/43274ed8bca545fde585d73d89086bf9ae5ed1d0/wav/20-0.wav",
+        "source": "https://github.com/zevv/bucklespring/tree/43274ed8bca545fde585d73d89086bf9ae5ed1d0",
+        "author": "Ico Doornekamp",
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "sha256": "5933a320c0f93d50610059dad2876ac832bb182b746f54a5fd71e033c0906ddd"
+      },
+      {
+        "file": "21-0.wav",
+        "url": "https://raw.githubusercontent.com/zevv/bucklespring/43274ed8bca545fde585d73d89086bf9ae5ed1d0/wav/21-0.wav",
+        "source": "https://github.com/zevv/bucklespring/tree/43274ed8bca545fde585d73d89086bf9ae5ed1d0",
+        "author": "Ico Doornekamp",
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "sha256": "3e6f59cb710b3cdd2522d9b6eca32cb778582b610072431e53db14894a3f53de"
+      },
+      {
+        "file": "22-0.wav",
+        "url": "https://raw.githubusercontent.com/zevv/bucklespring/43274ed8bca545fde585d73d89086bf9ae5ed1d0/wav/22-0.wav",
+        "source": "https://github.com/zevv/bucklespring/tree/43274ed8bca545fde585d73d89086bf9ae5ed1d0",
+        "author": "Ico Doornekamp",
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "sha256": "1a63c59193a8c9cfa9087df58c778296268bcfd1a415fdc146ebfd78cf8515ef"
+      },
+      {
+        "file": "23-0.wav",
+        "url": "https://raw.githubusercontent.com/zevv/bucklespring/43274ed8bca545fde585d73d89086bf9ae5ed1d0/wav/23-0.wav",
+        "source": "https://github.com/zevv/bucklespring/tree/43274ed8bca545fde585d73d89086bf9ae5ed1d0",
+        "author": "Ico Doornekamp",
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "sha256": "4d97022586705efcec066ec56a44f8023abec946af92c8215285f7f10f2d4173"
+      },
+      {
+        "file": "39-0.wav",
+        "url": "https://raw.githubusercontent.com/zevv/bucklespring/43274ed8bca545fde585d73d89086bf9ae5ed1d0/wav/39-0.wav",
+        "source": "https://github.com/zevv/bucklespring/tree/43274ed8bca545fde585d73d89086bf9ae5ed1d0",
+        "author": "Ico Doornekamp",
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "sha256": "fbe0a63fd3fa9c25fff62d2ff737a9e356ae250cb84a75b24c21722d71b01b5b"
+      },
+      {
+        "file": "1c-0.wav",
+        "url": "https://raw.githubusercontent.com/zevv/bucklespring/43274ed8bca545fde585d73d89086bf9ae5ed1d0/wav/1c-0.wav",
+        "source": "https://github.com/zevv/bucklespring/tree/43274ed8bca545fde585d73d89086bf9ae5ed1d0",
+        "author": "Ico Doornekamp",
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "sha256": "2d8aede25dafee4780238e9a67b83db5d44cde3787aa75a4997c5c4a40fca913"
+      },
+      {
+        "file": "0e-0.wav",
+        "url": "https://raw.githubusercontent.com/zevv/bucklespring/43274ed8bca545fde585d73d89086bf9ae5ed1d0/wav/0e-0.wav",
+        "source": "https://github.com/zevv/bucklespring/tree/43274ed8bca545fde585d73d89086bf9ae5ed1d0",
+        "author": "Ico Doornekamp",
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "sha256": "524579e9037630771374afd26290f72e549d9d370dc3e86019ef83d32a0b1f56"
+      }
+    ],
+    "clips": {
+      "key0": {
+        "file": "1e-0.wav",
+        "start": 0
+      },
+      "key1": {
+        "file": "1f-0.wav",
+        "start": 0
+      },
+      "key2": {
+        "file": "20-0.wav",
+        "start": 0
+      },
+      "key3": {
+        "file": "21-0.wav",
+        "start": 0
+      },
+      "key4": {
+        "file": "22-0.wav",
+        "start": 0
+      },
+      "key5": {
+        "file": "23-0.wav",
+        "start": 0
+      },
+      "space": {
+        "file": "39-0.wav",
+        "start": 0
+      },
+      "enter": {
+        "file": "1c-0.wav",
+        "start": 0
+      },
+      "backspace": {
+        "file": "0e-0.wav",
+        "start": 0
+      }
+    }
+  }
+]

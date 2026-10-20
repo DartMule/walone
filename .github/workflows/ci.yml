@@ -1,0 +1,65 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Gitleaks 8.30.1
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$directory"
+          cd "$directory"
+          base="https://github.com/gitleaks/gitleaks/releases/download/v$GITLEAKS_VERSION"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl --fail --location --retry 3 -o "$archive" "$base/$archive"
+          curl --fail --location --retry 3 -o checksums.txt "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " $archive$" checksums.txt | sha256sum --check --strict
+          tar -xzf "$archive" gitleaks
+          echo "$directory" >> "$GITHUB_PATH"
+      - name: Scan current files
+        run: gitleaks dir --redact --no-banner --config .gitleaks.toml .
+      - name: Scan Git history
+        run: gitleaks git --redact --no-banner --config .gitleaks.toml .
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install pinned Flutter SDK
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import json; print(json.load(open(".fvmrc"))["flutter"])')
+          git clone --depth 1 --branch "$version" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter pub get --enforce-lockfile
+      - name: Verify bundled resources
+        run: python3 tool/check_migration.py
+      - name: Check Python release tools
+        run: python3 -m unittest discover -s tool -p '*_test.py'
+      - name: Analyze
+        run: python3 tool/resource_queue.py flutter analyze --no-pub
+      - name: Test
+        run: python3 tool/resource_queue.py flutter test --no-pub --concurrency=1
+      - name: Build macOS
+        run: python3 tool/resource_queue.py flutter build macos --release --no-pub

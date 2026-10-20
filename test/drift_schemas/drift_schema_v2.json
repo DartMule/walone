@@ -1,0 +1,362 @@
+{
+  "_meta": {
+    "description": "This file contains a serialized version of schema entities for drift.",
+    "version": "1.3.0"
+  },
+  "options": {
+    "store_date_time_values_as_text": false
+  },
+  "entities": [
+    {
+      "id": 0,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "activity_days",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "day",
+            "getter_name": "day",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "listening_ms",
+            "getter_name": "listeningMs",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "music_ms",
+            "getter_name": "musicMs",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "atmosphere_ms",
+            "getter_name": "atmosphereMs",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "key_presses",
+            "getter_name": "keyPresses",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "focus_ms",
+            "getter_name": "focusMs",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "pomodoro_ms",
+            "getter_name": "pomodoroMs",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "stopwatch_ms",
+            "getter_name": "stopwatchMs",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "goal_minutes",
+            "getter_name": "goalMinutes",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "key_goal",
+            "getter_name": "keyGoal",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "day"
+        ]
+      }
+    },
+    {
+      "id": 1,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "listening_sources",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "kind",
+            "getter_name": "kind",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "source_id",
+            "getter_name": "sourceId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "name",
+            "getter_name": "name",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "kind",
+          "source_id"
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "source_days",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "day",
+            "getter_name": "day",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "kind",
+            "getter_name": "kind",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "source_id",
+            "getter_name": "sourceId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "listening_ms",
+            "getter_name": "listeningMs",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "day",
+          "kind",
+          "source_id"
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "statistics_preferences",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "id",
+            "getter_name": "id",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('1')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "collecting",
+            "getter_name": "collecting",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"collecting\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"collecting\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('1')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "goal_minutes",
+            "getter_name": "goalMinutes",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('30')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "key_goal",
+            "getter_name": "keyGoal",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "calendar_keys",
+            "getter_name": "calendarKeys",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"calendar_keys\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"calendar_keys\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "calendar_focus",
+            "getter_name": "calendarFocus",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"calendar_focus\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"calendar_focus\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('0')",
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "id"
+        ]
+      }
+    }
+  ],
+  "fixed_sql": [
+    {
+      "name": "activity_days",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"activity_days\" (\"day\" TEXT NOT NULL, \"listening_ms\" INTEGER NOT NULL DEFAULT 0, \"music_ms\" INTEGER NOT NULL DEFAULT 0, \"atmosphere_ms\" INTEGER NOT NULL DEFAULT 0, \"key_presses\" INTEGER NOT NULL DEFAULT 0, \"focus_ms\" INTEGER NOT NULL DEFAULT 0, \"pomodoro_ms\" INTEGER NOT NULL DEFAULT 0, \"stopwatch_ms\" INTEGER NOT NULL DEFAULT 0, \"goal_minutes\" INTEGER NOT NULL, \"key_goal\" INTEGER NULL, PRIMARY KEY (\"day\"));"
+        }
+      ]
+    },
+    {
+      "name": "listening_sources",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"listening_sources\" (\"kind\" TEXT NOT NULL, \"source_id\" TEXT NOT NULL, \"name\" TEXT NOT NULL, PRIMARY KEY (\"kind\", \"source_id\"));"
+        }
+      ]
+    },
+    {
+      "name": "source_days",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"source_days\" (\"day\" TEXT NOT NULL, \"kind\" TEXT NOT NULL, \"source_id\" TEXT NOT NULL, \"listening_ms\" INTEGER NOT NULL, PRIMARY KEY (\"day\", \"kind\", \"source_id\"));"
+        }
+      ]
+    },
+    {
+      "name": "statistics_preferences",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"statistics_preferences\" (\"id\" INTEGER NOT NULL DEFAULT 1, \"collecting\" INTEGER NOT NULL DEFAULT 1 CHECK (\"collecting\" IN (0, 1)), \"goal_minutes\" INTEGER NOT NULL DEFAULT 30, \"key_goal\" INTEGER NULL, \"calendar_keys\" INTEGER NOT NULL DEFAULT 0 CHECK (\"calendar_keys\" IN (0, 1)), \"calendar_focus\" INTEGER NOT NULL DEFAULT 0 CHECK (\"calendar_focus\" IN (0, 1)), PRIMARY KEY (\"id\"));"
+        }
+      ]
+    }
+  ]
+}

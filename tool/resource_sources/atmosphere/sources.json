@@ -1,0 +1,100 @@
+[
+  {
+    "id": "rain",
+    "file": "rain.ogg",
+    "author": "alex36917",
+    "license": "CC BY 4.0",
+    "source": "https://freesound.org/people/alex36917/sounds/524605/",
+    "editor": "Porrumentzio",
+    "events": false,
+    "sha256": "b84c1daf259a24283be40b7663656d17676df4eb60c1e0332820570db891848a",
+    "download": "https://raw.githubusercontent.com/rafaelmardojai/blanket/775f2a767230a9681850d1b1e085be58656f1382/data/resources/sounds/rain.ogg"
+  },
+  {
+    "id": "ocean",
+    "file": "waves.ogg",
+    "author": "Luftrum",
+    "license": "CC BY 4.0",
+    "source": "https://freesound.org/people/Luftrum/sounds/48412/",
+    "editor": "Porrumentzio",
+    "events": false,
+    "sha256": "20e1aec7c7542f71645275871650881ea33bc92bd9816b243ea920bb1daa51a0",
+    "download": "https://raw.githubusercontent.com/rafaelmardojai/blanket/775f2a767230a9681850d1b1e085be58656f1382/data/resources/sounds/waves.ogg"
+  },
+  {
+    "id": "train",
+    "file": "train.ogg",
+    "author": "SDLx",
+    "license": "CC BY 3.0",
+    "source": "https://freesound.org/people/SDLx/sounds/259988/",
+    "editor": "",
+    "events": false,
+    "sha256": "b749ecf8f04842075c061e2f5572c85b2827d9ecc0670476f3339a9288bb4d71",
+    "download": "https://raw.githubusercontent.com/rafaelmardojai/blanket/775f2a767230a9681850d1b1e085be58656f1382/data/resources/sounds/train.ogg"
+  },
+  {
+    "id": "cafe",
+    "file": "coffee-shop.ogg",
+    "author": "stephan",
+    "license": "Public Domain",
+    "source": "https://soundbible.com/1664-Restaurant-Ambiance.html",
+    "editor": "",
+    "events": false,
+    "sha256": "397b5d95f06df69ba2989147cf9c37a417b2dc5950c1a16fbe6be6fa372d25ef",
+    "download": "https://raw.githubusercontent.com/rafaelmardojai/blanket/775f2a767230a9681850d1b1e085be58656f1382/data/resources/sounds/coffee-shop.ogg"
+  },
+  {
+    "id": "wind",
+    "file": "wind.ogg",
+    "author": "felix.blume",
+    "license": "CC0 1.0",
+    "source": "https://freesound.org/people/felix.blume/sounds/217506/",
+    "editor": "Porrumentzio",
+    "events": false,
+    "sha256": "cfdc81be69cd5f434ebfeb708bdf094725f3052d76691f550ff0e10eee3e32d2",
+    "download": "https://raw.githubusercontent.com/rafaelmardojai/blanket/775f2a767230a9681850d1b1e085be58656f1382/data/resources/sounds/wind.ogg"
+  },
+  {
+    "id": "birds",
+    "file": "birds.ogg",
+    "author": "kvgarlic",
+    "license": "CC0 1.0",
+    "source": "https://freesound.org/people/kvgarlic/sounds/156826/",
+    "editor": "Porrumentzio",
+    "events": true,
+    "sha256": "e59b19c2a377d5835d07e7ec8f8c876b9f40ae7f703738b55d616ef96a1638b2",
+    "download": "https://raw.githubusercontent.com/rafaelmardojai/blanket/775f2a767230a9681850d1b1e085be58656f1382/data/resources/sounds/birds.ogg"
+  },
+  {
+    "id": "seagulls",
+    "file": "seagulls.mp3",
+    "author": "squashy555",
+    "license": "CC0 1.0",
+    "source": "https://freesound.org/people/squashy555/sounds/353416/",
+    "editor": "",
+    "events": true,
+    "sha256": "d3fcae085e6fd7af67f22edfac00370e432161f506b3f83f090c099ccb2f25b9",
+    "download": "https://cdn.freesound.org/previews/353/353416_1149179-hq.mp3"
+  },
+  {
+    "id": "white",
+    "generated": true,
+    "license": "CC0 1.0",
+    "author": "Walone contributors",
+    "source": "scripts/prepare-atmosphere.py"
+  },
+  {
+    "id": "pink",
+    "generated": true,
+    "license": "CC0 1.0",
+    "author": "Walone contributors",
+    "source": "scripts/prepare-atmosphere.py"
+  },
+  {
+    "id": "brown",
+    "generated": true,
+    "license": "CC0 1.0",
+    "author": "Walone contributors",
+    "source": "scripts/prepare-atmosphere.py"
+  }
+]

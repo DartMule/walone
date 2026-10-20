@@ -1,0 +1,65 @@
+name: walone
+description: "Walone — звуки клавиатуры для macOS и Windows."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.0
+  flutter: '>=3.47.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^9.1.1
+  flutter_md: ^0.2.0
+  audioplayers: ^6.8.1
+  file_selector: ^1.1.0
+  desktop_drop: ^0.7.0
+  desktop_webview_window: ^0.3.2
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  crypto: ^3.0.7
+  archive: ^4.5.2
+  uuid: ^4.6.0
+  g1455: ^0.2.0
+  drift: ^2.35.2
+  sqlite3: ^3.7.1
+
+dev_dependencies:
+  integration_test:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  drift_dev: ^2.35.1
+  build_runner: ^2.16.2
+
+flutter:
+  uses-material-design: true
+  # BEGIN KEYBOARD ASSETS — генерируется tool/prepare_assets.py
+  assets:
+    - assets/catalog.json
+    - assets/licenses/
+    - assets/atmosphere/
+    - assets/import/
+    - assets/timer/
+    - assets/keyboards/brown/
+    - assets/keyboards/red/
+    - assets/keyboards/apex-pro-tkl-v2/
+    - assets/keyboards/logitech-g915-tkl-brown/
+    - assets/keyboards/ibm-model-m/
+    - assets/keyboards/hhkb-hybrid/
+    - assets/keyboards/whitefox/
+    - assets/keyboards/keychron-k10/
+    - assets/keyboards/dell-d510/
+    - assets/keyboards/razer-ultimate/
+    - assets/keyboards/razer-2013/
+    - assets/keyboards/razer-tournament/
+    - assets/keyboards/corsair-k70/
+    - assets/keyboards/corsair-k95-red/
+    - assets/keyboards/corsair-k95-brown/
+    - assets/keyboards/ducky-miya/
+    - assets/keyboards/apple-iie/
+    - assets/keyboards/apple-pro/
+    - assets/keyboards/apple-aluminum/
+    - assets/keyboards/microsoft/

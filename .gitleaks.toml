@@ -1,0 +1,20 @@
+title = "Walone secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Pinned SHA-256 audio/resource checksums, not API credentials"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)tool/resource_sources/bundled-sha256\.json$''']
+regexTarget = "secret"
+regexes = ['''^[a-f0-9]{64}$''']
+
+[[allowlists]]
+description = "Public UserDefaults key used by calibration and its regression test"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)(macos/Runner/SensorExperiment\.swift|tool/sensor_check\.swift)$''']
+regexTarget = "secret"
+regexes = ['''^intensityCalibration\.v1$''']

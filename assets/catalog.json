@@ -1,0 +1,142 @@
+[
+  {
+    "id": "brown",
+    "title": "Cherry MX Brown",
+    "detail": "Тактильный · плотный и сдержанный",
+    "author": "Mechvibes",
+    "keyCount": 6
+  },
+  {
+    "id": "red",
+    "title": "Cherry MX Red",
+    "detail": "Линейный · лёгкий и звонкий",
+    "author": "Mechvibes",
+    "keyCount": 6
+  },
+  {
+    "id": "apex-pro-tkl-v2",
+    "title": "SteelSeries Apex Pro TKL",
+    "detail": "Apex Pro TKL v2 · короткий и отчётливый",
+    "author": "Akira",
+    "keyCount": 3
+  },
+  {
+    "id": "logitech-g915-tkl-brown",
+    "title": "Logitech G915 TKL",
+    "detail": "Brown · низкопрофильный, тактильный",
+    "author": "Keyboard Sounds",
+    "keyCount": 5
+  },
+  {
+    "id": "ibm-model-m",
+    "title": "IBM Model M Space Saver",
+    "detail": "Buckling spring · винтажная механика",
+    "author": "Ico Doornekamp",
+    "keyCount": 6
+  },
+  {
+    "id": "hhkb-hybrid",
+    "title": "HHKB Professional Hybrid",
+    "detail": "Topre 45 g · без модификаций",
+    "author": "grcekh",
+    "keyCount": 6
+  },
+  {
+    "id": "whitefox",
+    "title": "WhiteFox",
+    "detail": "Hako Violet · механическая клавиатура",
+    "author": "grcekh",
+    "keyCount": 6
+  },
+  {
+    "id": "keychron-k10",
+    "title": "Keychron K10",
+    "detail": "Линейные переключатели · AZERTY",
+    "author": "Sadiquecat",
+    "keyCount": 6
+  },
+  {
+    "id": "dell-d510",
+    "title": "Dell Latitude D510",
+    "detail": "Клавиатура ноутбука · медленная печать",
+    "author": "justamudkip",
+    "keyCount": 6
+  },
+  {
+    "id": "razer-ultimate",
+    "title": "Razer BlackWidow Ultimate",
+    "detail": "Механическая клавиатура · запись Rode NT1",
+    "author": "yottasounds",
+    "keyCount": 6
+  },
+  {
+    "id": "razer-2013",
+    "title": "Razer BlackWidow (2013)",
+    "detail": "Две отдельные записи нажатия",
+    "author": "newagesoup",
+    "keyCount": 2
+  },
+  {
+    "id": "razer-tournament",
+    "title": "Razer BlackWidow Tournament Edition",
+    "detail": "Щёлкающие переключатели · запись 2015 года",
+    "author": "WaveAdventurer",
+    "keyCount": 6
+  },
+  {
+    "id": "corsair-k70",
+    "title": "Corsair K70 (2016)",
+    "detail": "Механическая клавиатура · запись печати",
+    "author": "luutoo",
+    "keyCount": 6
+  },
+  {
+    "id": "corsair-k95-red",
+    "title": "Corsair K95",
+    "detail": "Cherry MX Red · линейные переключатели",
+    "author": "handygaber",
+    "keyCount": 6
+  },
+  {
+    "id": "corsair-k95-brown",
+    "title": "Corsair K95 RGB Platinum",
+    "detail": "Cherry MX Brown · тактильные переключатели",
+    "author": "NickTHH",
+    "keyCount": 6
+  },
+  {
+    "id": "ducky-miya",
+    "title": "Ducky × Varmilo Miya",
+    "detail": "Brown · тактильные переключатели",
+    "author": "eclectic-kitty",
+    "keyCount": 6
+  },
+  {
+    "id": "apple-iie",
+    "title": "Apple IIe",
+    "detail": "Винтажный компьютер · запись Zoom H6",
+    "author": "makenoisemusic",
+    "keyCount": 6
+  },
+  {
+    "id": "apple-pro",
+    "title": "Apple Pro Keyboard",
+    "detail": "Настольная клавиатура · запись печати",
+    "author": "BrodieSound",
+    "keyCount": 6
+  },
+  {
+    "id": "apple-aluminum",
+    "title": "Apple Aluminum Keyboard",
+    "detail": "Алюминиевая клавиатура · запись Rode NT5",
+    "author": "Tomlija",
+    "keyCount": 6
+  },
+  {
+    "id": "microsoft",
+    "title": "Microsoft Internet Keyboard Pro",
+    "detail": "RT9420 · запись Tascam TM-80",
+    "author": "PanosA",
+    "keyCount": 6
+  }
+]

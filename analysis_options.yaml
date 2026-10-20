@@ -1,0 +1,13 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - windows/**
+    - macos/**
+    # Снимки старых схем генерирует drift_dev, не редактируем их вручную.
+    - test/statistics_migrations/**
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
