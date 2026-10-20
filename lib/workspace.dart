@@ -491,8 +491,14 @@ class WorkspaceSidebar extends StatelessWidget {
                               onPressed: () =>
                                   settings!.command('checkForUpdates'),
                               color: theme.colorScheme.onSurfaceVariant,
+                              style: IconButton.styleFrom(
+                                shape: const CircleBorder(),
+                                minimumSize: const Size.square(36),
+                                padding: const EdgeInsets.all(8),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
                               iconSize: 18,
-                              icon: const Icon(Icons.system_update_alt_rounded),
+                              icon: const Icon(Icons.arrow_circle_up_rounded),
                             ),
                     ),
                   ],

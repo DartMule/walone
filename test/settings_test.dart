@@ -177,13 +177,19 @@ void main() {
           ),
         ),
       );
-      expect(find.byIcon(Icons.system_update_alt_rounded), findsNothing);
+      expect(find.byIcon(Icons.arrow_circle_up_rounded), findsNothing);
       await tester.runAsync(
         () => action('updateStatus', version: '0.1.1', ready: false),
       );
       await tester.pump();
       final button = find.byTooltip('Обновить до 0.1.1');
       expect(button, findsOneWidget);
+      expect(find.byIcon(Icons.arrow_circle_up_rounded), findsOneWidget);
+      expect(tester.getSize(button), const Size.square(36));
+      final iconButton = tester.widget<IconButton>(
+        find.ancestor(of: button, matching: find.byType(IconButton)),
+      );
+      expect(iconButton.style!.shape!.resolve({}), isA<CircleBorder>());
       expect(
         tester.getCenter(find.text('Настройки')).dy,
         inInclusiveRange(
@@ -201,7 +207,7 @@ void main() {
       expect(calls.last.method, 'checkForUpdates');
       await tester.runAsync(() => action('updateStatus'));
       await tester.pump();
-      expect(find.byIcon(Icons.system_update_alt_rounded), findsNothing);
+      expect(find.byIcon(Icons.arrow_circle_up_rounded), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });

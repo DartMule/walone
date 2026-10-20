@@ -28,12 +28,20 @@ class AppDelegate: FlutterAppDelegate, SPUStandardUserDriverDelegate, SPUUpdater
     updaterController = SPUStandardUpdaterController(
       startingUpdater: true, updaterDelegate: self, userDriverDelegate: self
     )
+    if let updater = updaterController?.updater, updater.automaticallyChecksForUpdates {
+      // Проверяем при каждом запуске, не дожидаясь очередного интервала Sparkle.
+      updater.checkForUpdatesInBackground()
+    }
     #endif
   }
 
   @objc func showSettings(_ sender: Any?) { mainWindow?.desktopBridge?.showSettings() }
 
   var supportsGentleScheduledUpdateReminders: Bool { true }
+
+  func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+    mainWindow?.desktopBridge?.setUpdateAvailable(item.displayVersionString)
+  }
 
   func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool,
       forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
