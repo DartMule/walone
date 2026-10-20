@@ -219,6 +219,8 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(players.every((player) => player.playing), isTrue);
       await audio.update({'rain': 0.3});
+      // Завершаем обе асинхронные записи громкости текущего шага перехода.
+      await Future<void>.delayed(Duration.zero);
       expect(
         players.fold<double>(
           0,
