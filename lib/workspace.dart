@@ -282,6 +282,7 @@ class _WorkspacePageState extends State<WorkspacePage>
         onSelected: _selectSection,
         timer: context.read<TimerCubit>(),
         music: context.read<MusicCubit>(),
+        settings: _settings,
         player: compact
             ? CompactPlayer(
                 onExpand: togglePlayer,
@@ -448,7 +449,9 @@ class WorkspaceSidebar extends StatelessWidget {
     this.player,
     this.timer,
     this.music,
+    this.settings,
   });
+  final SettingsCubit? settings;
   final MusicCubit? music;
   final TimerCubit? timer;
   final int selected;
@@ -471,7 +474,31 @@ class WorkspaceSidebar extends StatelessWidget {
       );
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-        child: SizedBox(height: tileHeight, child: tile),
+        child: SizedBox(
+          height: tileHeight,
+          child: index == 5 && settings != null
+              ? Row(
+                  children: [
+                    Expanded(child: tile),
+                    BlocBuilder<SettingsCubit, SettingsState>(
+                      bloc: settings,
+                      builder: (context, state) => state.updateVersion == null
+                          ? const SizedBox.shrink()
+                          : IconButton(
+                              tooltip: state.updateReady
+                                  ? 'Обновить и перезапустить'
+                                  : 'Обновить до ${state.updateVersion}',
+                              onPressed: () =>
+                                  settings!.command('checkForUpdates'),
+                              color: theme.colorScheme.onSurfaceVariant,
+                              iconSize: 18,
+                              icon: const Icon(Icons.system_update_alt_rounded),
+                            ),
+                    ),
+                  ],
+                )
+              : tile,
+        ),
       );
     }
 

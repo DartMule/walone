@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
+import 'package:walone/workspace.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:walone/core/storage.dart';
@@ -124,6 +126,52 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
   });
+
+  for (final brightness in Brightness.values) {
+    testWidgets('Кнопка обновления рядом с настройками: $brightness', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(brightness: brightness),
+          home: Scaffold(
+            body: WorkspaceSidebar(
+              selected: 0,
+              onSelected: (_) {},
+              settings: settings,
+            ),
+          ),
+        ),
+      );
+      expect(find.byIcon(Icons.system_update_alt_rounded), findsNothing);
+      await tester.runAsync(
+        () => action('updateStatus', version: '0.1.1', ready: false),
+      );
+      await tester.pump();
+      final button = find.byTooltip('Обновить до 0.1.1');
+      expect(button, findsOneWidget);
+      expect(
+        tester.getCenter(find.text('Настройки')).dy,
+        inInclusiveRange(
+          tester.getTopLeft(button).dy,
+          tester.getBottomRight(button).dy,
+        ),
+      );
+      await tester.tap(button);
+      expect(calls.last.method, 'checkForUpdates');
+      await tester.runAsync(
+        () => action('updateStatus', version: '0.1.1', ready: true),
+      );
+      await tester.pump();
+      await tester.tap(find.byTooltip('Обновить и перезапустить'));
+      expect(calls.last.method, 'checkForUpdates');
+      await tester.runAsync(() => action('updateStatus'));
+      await tester.pump();
+      expect(find.byIcon(Icons.system_update_alt_rounded), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 
   test('Автозапуск меняется только явно; отказ сохраняет статус ОС', () async {
     expect(settings.state.launchAtLogin, isFalse);
