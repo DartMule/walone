@@ -212,7 +212,7 @@ final class SensorExperiment {
              "p75_g": CalibrationSummary.percentile(values, fraction: 0.75) as Any? ?? NSNull(),
              "p90_g": CalibrationSummary.percentile(values, fraction: 0.9) as Any? ?? NSNull()]
         }
-        return try JSONSerialization.data(withJSONObject: ["schema_version": 5, "groups": groups, "experimental": true,
+        let report: [String: Any] = ["schema_version": 5, "groups": groups, "experimental": true,
                 "processing_ms_last": processingMS,
                 "processing_ms_p50": CalibrationSummary.median(processingTimes) as Any? ?? NSNull(),
                 "processing_ms_p95": CalibrationSummary.percentile(processingTimes, fraction: 0.95) as Any? ?? NSNull(),
@@ -237,7 +237,8 @@ final class SensorExperiment {
                 "sound_paused_at_export": paused,
                 "calibration_active": calibration != nil,
                 "calibration_anchors_g": calibration.map { ["soft": $0.softG, "normal": $0.normalG, "hard": $0.hardG] } as Any? ?? NSNull(),
-                "audible_latency_measured": false], options: [.prettyPrinted, .sortedKeys])
+                "audible_latency_measured": false]
+        return try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
     }
 }
 
