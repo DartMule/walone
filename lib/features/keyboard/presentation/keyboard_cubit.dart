@@ -201,6 +201,10 @@ class KeyboardCubit extends Cubit<KeyboardState> {
     emit(state.copyWith(busy: true));
     final nextVolume = (volume ?? state.volume).clamp(0.0, 1.0);
     try {
+      if (enabled == true && !state.status.enabled) {
+        final status = await _repository.status();
+        if (!status.hasPermission) await _repository.requestPermission();
+      }
       if (pack != null) await stopPreview();
       await _repository.configure(
         selected,

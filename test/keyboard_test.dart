@@ -28,6 +28,9 @@ class FakeKeyboardRepository implements KeyboardRepository {
   bool enabled = false;
   bool fail = false;
   bool disposed = false;
+  bool hasPermission = false;
+  bool failPermission = false;
+  int permissionRequests = 0;
   int previews = 0;
   int receivedKeys = 0;
   KeyboardPack selected = brown;
@@ -41,8 +44,8 @@ class FakeKeyboardRepository implements KeyboardRepository {
 
   @override
   Future<KeyboardStatus> status() async => KeyboardStatus(
-    hasPermission: false,
-    listening: true,
+    hasPermission: hasPermission,
+    listening: hasPermission,
     enabled: enabled,
     receivedKeys: receivedKeys,
   );
@@ -63,7 +66,12 @@ class FakeKeyboardRepository implements KeyboardRepository {
   }
 
   @override
-  Future<void> requestPermission() async {}
+  Future<void> requestPermission() async {
+    permissionRequests++;
+    if (failPermission) {
+      throw PlatformException(code: 'permission', message: 'Ошибка разрешения');
+    }
+  }
 
   @override
   Future<void> dispose() async {
@@ -73,6 +81,41 @@ class FakeKeyboardRepository implements KeyboardRepository {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('Включение звука запрашивает отсутствующее разрешение', () async {
+    final repository = FakeKeyboardRepository();
+    final cubit = KeyboardCubit(repository);
+    addTearDown(cubit.close);
+    await cubit.initialize();
+    expect(repository.permissionRequests, 0);
+    await cubit.configure(enabled: true);
+    expect(repository.permissionRequests, 1);
+    expect(cubit.state.status.enabled, isTrue);
+    await cubit.configure(volume: 0.5);
+    await cubit.choose(red);
+    await cubit.configure(enabled: false);
+    expect(repository.permissionRequests, 1);
+    repository.hasPermission = true;
+    await cubit.configure(enabled: true);
+    expect(repository.permissionRequests, 1);
+    expect(cubit.state.status.hasPermission, isTrue);
+  });
+
+  test('Ошибка запроса разрешения позволяет повторить включение', () async {
+    final repository = FakeKeyboardRepository()..failPermission = true;
+    final cubit = KeyboardCubit(repository);
+    addTearDown(cubit.close);
+    await cubit.initialize();
+    await cubit.configure(enabled: true);
+    expect(cubit.state.error, contains('Ошибка разрешения'));
+    expect(cubit.state.busy, isFalse);
+    expect(repository.enabled, isFalse);
+    repository.failPermission = false;
+    await cubit.configure(enabled: true);
+    expect(repository.permissionRequests, 2);
+    expect(cubit.state.error, isNull);
+    expect(repository.enabled, isTrue);
+  });
 
   test(
     'Неизменный статус не обновляет интерфейс, новые нажатия обновляют',
@@ -254,6 +297,7 @@ void main() {
       await settle();
       final typing = find.byKey(const ValueKey('keyboard-typing'));
       await tester.ensureVisible(typing);
+      expect(tester.getSize(typing).height, lessThan(100));
       await tester.enterText(typing, 'Проверка печати');
       FocusManager.instance.primaryFocus?.unfocus();
       await settle();

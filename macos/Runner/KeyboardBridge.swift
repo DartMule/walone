@@ -127,10 +127,11 @@ final class KeyboardBridge: NSObject, FlutterStreamHandler {
                 errorMessage = nil
                 result(nil)
             case "requestPermission":
-                _ = CGRequestListenEventAccess()
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+                if !CGPreflightListenEventAccess(), !CGRequestListenEventAccess(),
+                   let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
                     NSWorkspace.shared.open(url)
                 }
+                updateTap()
                 result(nil)
             case "dispose":
                 shutdown()
