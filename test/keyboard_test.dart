@@ -364,5 +364,6 @@ void main() {
       expect(audio.disposed, isTrue);
       expect(repository.disposed, isTrue);
     },
+    variant: TargetPlatformVariant({TargetPlatform.macOS, TargetPlatform.windows}),
   );
 }

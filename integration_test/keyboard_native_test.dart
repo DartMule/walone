@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,6 +16,17 @@ void main() {
     'Нативный модуль загружает 20 наборов и воспроизводит их с нулевой громкостью',
     (tester) async {
       await tester.pumpWidget(const WaloneApp(keyboardOnly: true));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Проверить звучание'));
+      await tester.pumpAndSettle();
+      final typing = find.byKey(const ValueKey('keyboard-typing'));
+      await tester.ensureVisible(typing);
+      expect(find.byType(ErrorWidget), findsNothing);
+      expect(tester.getSize(typing).height, lessThan(100));
+      await tester.enterText(typing, 'Проверка печати');
+      await tester.pump();
+      expect(find.text('Проверка печати'), findsOneWidget);
+      FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
       const sensor = MethodChannel('dev.soyjanks.walone/keyboard');
       final experiment = await sensor.invokeMapMethod<String, dynamic>(
