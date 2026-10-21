@@ -26,6 +26,18 @@ extension NSAppleEventManager {
 
 class RunnerTests: XCTestCase {
 
+  func testUpdateClickDuringBackgroundDownloadShowsFeedback() {
+    let delegate = NSApp.delegate as! AppDelegate
+    let window = NSApp.windows.compactMap { $0 as? MainFlutterWindow }.first!
+    var checked = false
+    delegate.performUpdateCheck(canCheck: false) { checked = true }
+    XCTAssertFalse(checked)
+    XCTAssertNotNil(window.attachedSheet)
+    if let sheet = window.attachedSheet { window.endSheet(sheet) }
+    delegate.performUpdateCheck(canCheck: true) { checked = true }
+    XCTAssertTrue(checked)
+  }
+
   func testSRGBProjectKeepsImpellerAndFlutterSelectorContract() {
     // Внутренний hook должен по-прежнему существовать в закреплённом Flutter.
     let wideGamut = NSSelectorFromString("enableWideGamut")

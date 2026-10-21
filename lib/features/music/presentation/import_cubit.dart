@@ -78,6 +78,10 @@ class ImportCubit extends Cubit<ImportState> {
     if (!isClosed) emit(ImportState(busy: true, status: text));
   }
 
+  void clearResult() {
+    if (!state.busy) emit(const ImportState());
+  }
+
   Future<void> cancel() async {
     _worker?.cancel();
     await vk.cancel();
@@ -118,7 +122,17 @@ class ImportCubit extends Cubit<ImportState> {
         final message = await action(worker, directory);
         if (!isClosed) emit(ImportState(status: message));
       } catch (error) {
-        if (!isClosed) emit(ImportState(error: '$error'));
+        if (!isClosed) {
+          emit(
+            ImportState(
+              error: switch (error) {
+                StateError() => error.message.toString(),
+                FormatException() => error.message,
+                _ => '$error',
+              },
+            ),
+          );
+        }
       } finally {
         _worker = null;
         music.setImporting(false);
@@ -198,13 +212,27 @@ class ImportCubit extends Cubit<ImportState> {
     });
   }
 
-  Future<List<String>> _arguments(ImportProvider provider) async {
+  Future<List<String>> _arguments(
+    ImportProvider provider,
+    String? browser,
+  ) async {
+    if (browser != null && !youtubeBrowsers.containsKey(browser)) {
+      throw const FormatException('Выберите браузер из списка');
+    }
     final args = [
+      if (browser != null &&
+          (provider == ImportProvider.youtube ||
+              provider == ImportProvider.spotify)) ...[
+        '--cookies-from-browser',
+        browser,
+        // Диагностика сессии разбирается только в памяти MusicProcess.
+        '--verbose',
+      ],
       if (provider == ImportProvider.soundcloud) ...['--impersonate', 'chrome'],
       '--ignore-config',
       '--no-plugin-dirs',
       '--no-remote-components',
-      '--no-warnings',
+      if (provider == ImportProvider.soundcloud) '--no-warnings',
       '--no-progress',
       if (provider == ImportProvider.soundcloud) ...[
         '--cache-dir',
@@ -504,6 +532,7 @@ class ImportCubit extends Cubit<ImportState> {
     ImportProvider provider,
     String text, {
     int limit = 500,
+    String? youtubeBrowser,
     Future<String?> Function(String, List<String>)? chooseArtist,
   }) {
     if (state.busy) return Future.value();
@@ -528,7 +557,7 @@ class ImportCubit extends Cubit<ImportState> {
       final link = MusicLink.parse(provider, text);
       final ffmpeg = await toolFinder('ffmpeg');
       final tool = await toolFinder('yt-dlp');
-      final args = await _arguments(provider);
+      final args = await _arguments(provider, youtubeBrowser);
       if (provider == ImportProvider.spotify) {
         return _spotify(
           link,
@@ -587,32 +616,58 @@ class ImportCubit extends Cubit<ImportState> {
           }
         }
         if (limit > 0) sections = sections.take(limit).toList();
-        _status('Загружаем аудио YouTube…');
-        final input = await _download(metadata, worker, root, tool, args);
+        String? input;
         final prepared = <MusicTrack>[];
         try {
           for (var i = 0; i < sections.length; i++) {
             worker.check();
             _status('Подготовка: ${i + 1} из ${sections.length}');
             final section = sections[i];
+            final details = trackDetails({'title': section.title});
+            final artists = details.artists.isEmpty
+                ? metadataArtistNames(metadata)
+                : details.artists;
+            final resolvedSection = AudioSection(
+              section.start,
+              section.end,
+              details.title,
+            );
             final sourceID =
                 'youtube:${link.id}:${section.start}:${section.end}';
             final existing = music.repository.library.tracks
                 .where((t) => t.sourceID == sourceID)
                 .firstOrNull;
+            if (existing != null) {
+              prepared.add(
+                existing.artists.isEmpty &&
+                        existing.title == section.title &&
+                        artists.isNotEmpty
+                    ? existing.copyWith(
+                        title: details.title,
+                        artists: await _artists(artists),
+                      )
+                    : existing,
+              );
+              continue;
+            }
+            if (input == null) {
+              _status('Загружаем аудио YouTube…');
+              input = await _download(metadata, worker, root, tool, args);
+              _status('Подготовка: ${i + 1} из ${sections.length}');
+            }
             prepared.add(
-              existing ??
-                  await _prepared(
-                    await _render(input, section, root, worker, ffmpeg, i),
-                    section,
-                    sourceID,
-                    artists: metadataArtistNames(metadata),
-                  ),
+              await _prepared(
+                await _render(input, resolvedSection, root, worker, ffmpeg, i),
+                resolvedSection,
+                sourceID,
+                artists: artists,
+              ),
             );
           }
           worker.check();
           await music.accept(
             prepared,
+            repairMissingArtists: true,
             newPlaylistName: title.trim().substring(
               0,
               min(80, title.trim().length),

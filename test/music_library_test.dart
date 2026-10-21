@@ -152,6 +152,112 @@ void main() {
     );
   });
 
+  for (final chapters in [true, false]) {
+    test(
+      'Одиночное видео определяет исполнителей из ${chapters ? 'глав' : 'названия'}',
+      () async {
+        final worker = FakeProcess(
+          youtubeMetadata: {
+            'id': 'abcdefghijk',
+            'title': chapters ? 'Сборник' : 'Дурной Вкус - Пластинки',
+            'duration': 10,
+            if (chapters)
+              'chapters': [
+                {'start_time': 0, 'title': 'Дурной Вкус - Пластинки'},
+                {
+                  'start_time': 4,
+                  'title': 'Chernikovskaya Hata – Не Верь Слезам',
+                },
+              ],
+          },
+        );
+        final importer = ImportCubit(
+          music,
+          FakeVkSession(root),
+          toolFinder: (name) async => name,
+          workerFactory: () => worker,
+        );
+        addTearDown(importer.close);
+        await importer.remote(
+          ImportProvider.youtube,
+          'https://youtu.be/abcdefghijk',
+        );
+        expect(importer.state.error, isNull);
+        expect(repository.library.tracks.first.title, 'Пластинки');
+        expect(repository.library.tracks.first.artists, ['Дурной Вкус']);
+        if (chapters) {
+          expect(repository.library.tracks.last.title, 'Не Верь Слезам');
+          expect(repository.library.tracks.last.artists, [
+            'Chernikovskaya Hata',
+          ]);
+        }
+      },
+    );
+  }
+
+  test('Повторный импорт исправляет пустых исполнителей без скачивания и сохраняет ручные правки', () async {
+    final legacy = await repository.prepareFile(
+      (await File('${root.path}/legacy.wav').writeAsString('4')).path,
+      title: 'Дурной Вкус - Пластинки',
+      sourceID: 'youtube:abcdefghijk:0.0:4.0',
+    );
+    final edited = await repository.prepareFile(
+      (await File('${root.path}/edited.wav').writeAsString('6')).path,
+      title: 'Моё название',
+      artists: ['Мой исполнитель'],
+      sourceID: 'youtube:abcdefghijk:4.0:10.0',
+    );
+    await music.accept([legacy, edited], playlistID: allMusicID);
+    final worker = FakeProcess(
+      youtubeMetadata: {
+        'id': 'abcdefghijk',
+        'title': 'Сборник',
+        'duration': 10,
+        'chapters': [
+          {'start_time': 0, 'title': 'Дурной Вкус - Пластинки'},
+          {'start_time': 4, 'title': 'Chernikovskaya Hata - Не Верь Слезам'},
+        ],
+      },
+    )..failDownload = true;
+    final importer = ImportCubit(
+      music,
+      FakeVkSession(root),
+      toolFinder: (name) async => name,
+      workerFactory: () => worker,
+    );
+    addTearDown(importer.close);
+    await importer.remote(
+      ImportProvider.youtube,
+      'https://youtu.be/abcdefghijk',
+    );
+    expect(importer.state.error, isNull);
+    expect(repository.library.tracks, hasLength(2));
+    final repaired = repository.library.tracks.firstWhere(
+      (t) => t.id == legacy.id,
+    );
+    expect(repaired.title, 'Пластинки');
+    expect(repaired.artists, ['Дурной Вкус']);
+    expect(repaired.filename, legacy.filename);
+    final preserved = repository.library.tracks.firstWhere(
+      (t) => t.id == edited.id,
+    );
+    expect(preserved.title, 'Моё название');
+    expect(preserved.artists, ['Мой исполнитель']);
+    expect(worker.calls.where((a) => a.contains('--load-info-json')), isEmpty);
+    expect(worker.renders, 0);
+    await music.close();
+    music = MusicCubit(
+      MusicRepository(repository.directory, audioFactory: FakeAudio.new),
+    );
+    await music.initialize();
+    expect(
+      music.repository.library.tracks
+          .firstWhere((t) => t.id == legacy.id)
+          .artists,
+      ['Дурной Вкус'],
+    );
+  });
+
   test(
     'Поиск Spotify отклоняет другую версию и несовпадающую длительность',
     () {
@@ -340,10 +446,78 @@ void main() {
         ImportProvider.spotify,
         'https://open.spotify.com/track/1234567890123456789012',
       );
-      expect(importer.state.error, contains('YouTube запросил проверку «не бот»'));
+      expect(
+        importer.state.error,
+        contains('YouTube запросил проверку «не бот»'),
+      );
       expect(importer.state.busy, isFalse);
       expect(music.state.importing, isFalse);
       expect(repository.library.tracks.single.id, saved.id);
+    },
+  );
+
+  for (final provider in [
+    ImportProvider.youtube,
+    ImportProvider.spotify,
+    ImportProvider.soundcloud,
+  ]) {
+    test(
+      'Cookies браузера используются только для YouTube: ${provider.name}',
+      () async {
+        final worker = provider == ImportProvider.spotify
+            ? PlaylistProcess()
+            : FakeProcess();
+        final importer = ImportCubit(
+          music,
+          FakeVkSession(root),
+          toolFinder: (name) async => name,
+          workerFactory: () => worker,
+        );
+        addTearDown(importer.close);
+        await importer.remote(provider, switch (provider) {
+          ImportProvider.spotify =>
+            'https://open.spotify.com/track/1234567890123456789012',
+          ImportProvider.soundcloud => 'https://soundcloud.com/artist/track',
+          _ => 'https://youtube.com/watch?v=abcdefghijk',
+        }, youtubeBrowser: 'firefox');
+        final calls = worker.calls.where(
+          (args) =>
+              args.contains('--dump-single-json') ||
+              args.contains('--load-info-json'),
+        );
+        expect(calls, isNotEmpty);
+        for (final args in calls) {
+          if (provider == ImportProvider.soundcloud) {
+            expect(args, isNot(contains('--cookies-from-browser')));
+          } else {
+            expect(args[args.indexOf('--cookies-from-browser') + 1], 'firefox');
+            expect(args, contains('--verbose'));
+            expect(args, isNot(contains('--no-warnings')));
+          }
+        }
+        expect(importer.state.error, isNull);
+      },
+    );
+  }
+
+  test(
+    'Произвольные параметры вместо браузера отклоняются до запуска',
+    () async {
+      final worker = PlaylistProcess();
+      final importer = ImportCubit(
+        music,
+        FakeVkSession(root),
+        toolFinder: (name) async => name,
+        workerFactory: () => worker,
+      );
+      addTearDown(importer.close);
+      await importer.remote(
+        ImportProvider.youtube,
+        'https://youtube.com/watch?v=abcdefghij0',
+        youtubeBrowser: 'chrome:private-profile',
+      );
+      expect(importer.state.error, 'Выберите браузер из списка');
+      expect(worker.calls, isEmpty);
     },
   );
 

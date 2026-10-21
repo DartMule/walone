@@ -24,6 +24,7 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
   final _limit = TextEditingController(text: '500');
   String? _limitError;
   ImportProvider _provider = ImportProvider.youtube;
+  String _youtubeBrowser = '';
   Map<String, bool> _tools = {};
   bool _checking = true;
   String? _linkError;
@@ -55,6 +56,7 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
   }
 
   void _changed(String text) {
+    context.read<ImportCubit>().clearResult();
     setState(() {
       _linkError = null;
       if (text.trim().isEmpty) return;
@@ -141,6 +143,7 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                               ? null
                               : (_) {
                                   if (_link.text.trim().isEmpty) {
+                                    cubit.clearResult();
                                     setState(() => _provider = provider);
                                   } else {
                                     _changed(_link.text);
@@ -161,6 +164,29 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                     ImportProvider.spotify => 'Названия и исполнители из Spotify будут найдены на YouTube. Совпадения проверяются по названию и длительности; некоторые записи могут быть пропущены.',
                     ImportProvider.vk => 'Для импорта войдите в VK. Можно вставить ссылку на трек, плейлист или раздел «Моя музыка»: https://vk.com/music.',
                   }),
+                  if (_provider == ImportProvider.youtube ||
+                      _provider == ImportProvider.spotify) ...[
+                    const SizedBox(height: 12),
+                    DesktopSelect<String>(
+                      value: _youtubeBrowser,
+                      hint: 'Браузер для входа в YouTube',
+                      items: const {
+                        '': 'Без cookies браузера',
+                        ...youtubeBrowsers,
+                      },
+                      onChanged: state.busy
+                          ? null
+                          : (value) {
+                              cubit.clearResult();
+                              setState(() => _youtubeBrowser = value);
+                            },
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Если YouTube просит проверку «не бот», откройте видео в браузере, войдите и пройдите проверку. Выберите этот браузер и повторите импорт. Его cookies будут использованы только для этого импорта. macOS может запросить доступ к Связке ключей или данным браузера.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
                   if (_provider == ImportProvider.vk)
                     Wrap(
                       spacing: 8,
@@ -327,6 +353,9 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                         _provider,
                         _link.text,
                         limit: limit,
+                        youtubeBrowser: _youtubeBrowser.isEmpty
+                            ? null
+                            : _youtubeBrowser,
                         chooseArtist: (name, matches) => showDialog<String>(
                           context: context,
                           barrierDismissible: false,

@@ -72,9 +72,24 @@ class AppDelegate: FlutterAppDelegate, SPUStandardUserDriverDelegate, SPUUpdater
       installUpdate()
       return
     }
-    if updaterController.updater.canCheckForUpdates {
+    performUpdateCheck(canCheck: updaterController.updater.canCheckForUpdates) {
       updaterController.checkForUpdates(sender)
     }
+  }
+
+  func performUpdateCheck(canCheck: Bool, check: () -> Void) {
+    if canCheck {
+      check()
+      return
+    }
+    // Sparkle запрещает ручную проверку во время фоновой загрузки.
+    guard let window = mainWindow, window.attachedSheet == nil else { return }
+    mainWindow?.desktopBridge?.show()
+    let alert = NSAlert()
+    alert.messageText = "Подготовка обновления"
+    alert.informativeText = "Walone уже проверяет или загружает обновление в фоне. После загрузки кнопка предложит обновить и перезапустить приложение."
+    alert.addButton(withTitle: "Понятно")
+    alert.beginSheetModal(for: window)
   }
 
   override func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

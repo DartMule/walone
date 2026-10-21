@@ -174,11 +174,12 @@ class ImportTools {
         }
       }
       worker.check();
-      try {
-        await MusicProcess.verify(binary.path, tool);
-      } catch (_) {
-        throw StateError('Сборка $tool не запускается на этом компьютере');
-      }
+      // Первый запуск standalone-сборки распаковывает встроенный runtime.
+      await MusicProcess.verify(
+        binary.path,
+        tool,
+        timeout: const Duration(minutes: 1),
+      );
       worker.check();
       final directory = await Directory(
         destination?.path ??

@@ -478,6 +478,21 @@ void main() {
       );
       await tester.tap(find.text('Открыть'));
       await tester.pumpAndSettle();
+      expect(find.text('Без cookies браузера'), findsOneWidget);
+      await tester.runAsync(
+        () => importer.remote(
+          ImportProvider.youtube,
+          'https://youtube.com/watch?v=invalid',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Некорректный ID видео'), findsOneWidget);
+      await tester.tap(find.text('Без cookies браузера'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Firefox'));
+      await tester.pumpAndSettle();
+      expect(find.text('Firefox'), findsOneWidget);
+      expect(find.text('Некорректный ID видео'), findsNothing);
       expect(find.byType(DropdownButton<ImportProvider>), findsNothing);
       expect(find.text('Скачать недостающее'), findsOneWidget);
       FilledButton importButton() => tester.widget<FilledButton>(
@@ -489,6 +504,7 @@ void main() {
         'https://soundcloud.com/artist/track',
       );
       await tester.pumpAndSettle();
+      expect(find.text('Firefox'), findsNothing);
       expect(
         tester
             .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'SoundCloud'))

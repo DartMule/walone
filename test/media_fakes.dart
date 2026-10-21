@@ -122,6 +122,8 @@ class FakeKeyboard implements KeyboardRepository {
 }
 
 class FakeProcess extends MusicProcess {
+  FakeProcess({this.youtubeMetadata});
+  final Map<String, dynamic>? youtubeMetadata;
   int renders = 0;
   int? failAt;
   int? cancelAt;
@@ -153,15 +155,18 @@ class FakeProcess extends MusicProcess {
           'duration': 10,
         });
       }
-      return jsonEncode({
-        'id': 'abcdefghijk',
-        'title': 'YouTube test',
-        'duration': 10,
-        'chapters': [
-          {'start_time': 0, 'title': 'Первый'},
-          {'start_time': 4, 'title': 'Второй'},
-        ],
-      });
+      return jsonEncode(
+        youtubeMetadata ??
+            {
+              'id': 'abcdefghijk',
+              'title': 'YouTube test',
+              'duration': 10,
+              'chapters': [
+                {'start_time': 0, 'title': 'Первый'},
+                {'start_time': 4, 'title': 'Второй'},
+              ],
+            },
+      );
     }
     if (failDownload) throw StateError('Сервис не ответил вовремя');
     // Повторное извлечение по URL может отказать после успешных метаданных.

@@ -359,3 +359,11 @@ bool spotifyMatch(Map<String, dynamic> song, Map<String, dynamic> candidate) {
   }
   return true;
 }
+
+const youtubeBrowsers = {
+  'chrome': 'Chrome',
+  'firefox': 'Firefox',
+  'safari': 'Safari',
+  'edge': 'Edge',
+  'brave': 'Brave',
+};

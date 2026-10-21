@@ -417,15 +417,24 @@ class MusicCubit extends Cubit<MusicState> {
     String? playlistID,
     String? newPlaylistName,
     String? replacing,
+    bool repairMissingArtists = false,
   }) => _transaction(() async {
     final library = repository.library;
+    final known = {for (final t in library.tracks) t.id: t};
+    for (final track in tracks) {
+      final previous = known[track.id];
+      if (previous == null ||
+          repairMissingArtists &&
+              previous.sourceID != null &&
+              previous.sourceID == track.sourceID &&
+              previous.artists.isEmpty &&
+              track.artists.isNotEmpty) {
+        known[track.id] = track;
+      }
+    }
     final id = playlistID ?? const Uuid().v4();
     if (id == allMusicID ||
         library.artists.any((a) => artistMusicID(a) == id)) {
-      final known = {for (final t in library.tracks) t.id: t};
-      for (final t in tracks) {
-        known.putIfAbsent(t.id, () => t);
-      }
       await repository.commit(library.copyWith(tracks: known.values.toList()));
       return;
     }
@@ -452,10 +461,6 @@ class MusicCubit extends Cubit<MusicState> {
       name: existing?.name ?? checkedName(newPlaylistName ?? 'Импорт'),
       trackIDs: members,
     );
-    final known = {for (final track in library.tracks) track.id: track};
-    for (final track in tracks) {
-      known.putIfAbsent(track.id, () => track);
-    }
     final stops =
         replacing != null &&
         library.playingID == id &&

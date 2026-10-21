@@ -63,23 +63,45 @@ class MusicProcess {
     );
   }
 
-  static Future<void> verify(String path, String name) async {
-    final process = await Process.start(path, [
-      name == 'ffmpeg' ? '-version' : '--version',
-    ]);
+  static Future<void> verify(
+    String path,
+    String name, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final Process process;
+    try {
+      process = await Process.start(path, [
+        name == 'ffmpeg' ? '-version' : '--version',
+      ]);
+    } on ProcessException catch (error) {
+      throw StateError(
+        'Не удалось запустить $name (код ОС: ${error.errorCode}). '
+        'Проверьте совместимость компонента с вашей системой.',
+      );
+    }
     final output = process.stdout.transform(utf8.decoder).join();
     final errors = process.stderr.drain<void>();
-    final timer = Timer(
-      const Duration(seconds: 15),
-      () => process.kill(
+    var timedOut = false;
+    final timer = Timer(timeout, () {
+      timedOut = true;
+      process.kill(
         Platform.isWindows ? ProcessSignal.sigterm : ProcessSignal.sigkill,
-      ),
-    );
+      );
+    });
     try {
       final code = await process.exitCode;
       final version = await output;
       await errors;
-      if (code != 0) throw StateError('Не удалось запустить $name');
+      if (timedOut) {
+        throw StateError(
+          'Проверка $name заняла слишком много времени. Повторите попытку.',
+        );
+      }
+      if (code != 0) {
+        throw StateError(
+          'Не удалось запустить $name (код завершения: $code). Проверьте совместимость компонента с вашей системой.',
+        );
+      }
       if (name == 'node' || name == 'deno') {
         final match = RegExp(r'^(?:deno |v)(\d+)\.(\d+)\.\d+')
             .firstMatch(version);
@@ -174,10 +196,21 @@ class MusicProcess {
     });
     // Храним ограниченный хвост только в памяти; наружу — фиксированный текст.
     var diagnostic = '';
+    var browserCookiesRead = false;
+    var youtubeAccountCookies = false;
+    var youtubeCookiesExpired = false;
     final stderr = process.stderr
         .transform(const Utf8Decoder(allowMalformed: true))
         .listen((text) {
           diagnostic += text.toLowerCase();
+          browserCookiesRead |= RegExp(r'extracted \d+ cookies from')
+              .hasMatch(diagnostic);
+          youtubeAccountCookies |= diagnostic.contains(
+            'found youtube account cookies',
+          );
+          youtubeCookiesExpired |= diagnostic.contains(
+            'youtube account cookies are no longer valid',
+          );
           if (diagnostic.length > 16384) {
             diagnostic = diagnostic.substring(diagnostic.length - 16384);
           }
@@ -196,9 +229,44 @@ class MusicProcess {
             'Для SoundCloud нужен yt-dlp с поддержкой Chrome: установите полную официальную сборку или пакет yt-dlp[default,curl-cffi].',
           );
         }
-        if (diagnostic.contains('not a bot')) {
+        if (youtubeCookiesExpired) {
           throw StateError(
-            'YouTube запросил проверку «не бот». Повторите позже или используйте другую сеть.',
+            'Сессия YouTube в браузере истекла. Войдите в YouTube заново в выбранном браузере и повторите импорт.',
+          );
+        }
+        if (Platform.isMacOS &&
+            diagnostic.contains('cookie') &&
+            (diagnostic.contains('operation not permitted') ||
+                diagnostic.contains('permission denied'))) {
+          throw StateError(
+            'macOS запретила доступ к cookies браузера. Разрешите Walone доступ в «Системные настройки → Конфиденциальность и безопасность → Полный доступ к диску», затем полностью завершите Walone и откройте снова.',
+          );
+        }
+        if (diagnostic.contains('could not copy') &&
+                diagnostic.contains('cookie') ||
+            diagnostic.contains('failed to decrypt') ||
+            diagnostic.contains('could not find') &&
+                diagnostic.contains('cookies database') ||
+            diagnostic.contains('operation not permitted') &&
+                diagnostic.contains('cookie')) {
+          throw StateError(
+            'Не удалось прочитать cookies браузера. Закройте браузер и повторите или выберите другой браузер, в котором открыт YouTube.',
+          );
+        }
+        if (diagnostic.contains('not a bot')) {
+          final usesBrowser = arguments.contains('--cookies-from-browser');
+          if (usesBrowser && youtubeAccountCookies) {
+            throw StateError(
+              'YouTube отклонил запрос с cookies, хотя вход в аккаунт распознан. Проверка в браузере не разрешила этот запрос. Проверьте, что браузер и Walone используют одну сеть, или повторите позже.',
+            );
+          }
+          if (usesBrowser && browserCookiesRead) {
+            throw StateError(
+              'В cookies выбранного браузера не найдена активная сессия YouTube. Войдите в YouTube в обычном окне этого браузера и повторите импорт. Приватное окно использует отдельную сессию.',
+            );
+          }
+          throw StateError(
+            'YouTube запросил проверку «не бот». Откройте видео в браузере, войдите и пройдите проверку. Затем выберите этот браузер в окне импорта и повторите. Если не помогло, попробуйте позже или другую сеть.',
           );
         }
         if (timedOut ||
