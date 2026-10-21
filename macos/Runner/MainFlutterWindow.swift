@@ -267,15 +267,15 @@ class DesktopBridge: NSObject, NSMenuDelegate {
   }
 
   static func musicTrayImage(_ bars: [Double]?) -> NSImage {
-    let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+    // В покое — тот же знак из пяти полос, что и на светлой клавише приложения.
+    let levels: [Double] = bars ?? [2.0/12, 7.0/12, 1, 7.0/12, 2.0/12]
+    let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ -> Bool in
       NSColor.black.set()
-      // В покое — тот же знак из пяти полос, что и на светлой клавише приложения.
-      let levels = bars ?? [2.0/12, 7.0/12, 1, 7.0/12, 2.0/12]
       for (index, level) in levels.enumerated() {
-        let height = 3 + 12 * level
-        NSBezierPath(roundedRect: NSRect(x: 0.8 + Double(index) * 3.5,
-                                       y: (18 - height) / 2, width: 2.4, height: height),
-                     xRadius: 1.2, yRadius: 1.2).fill()
+        let height: CGFloat = 3 + 12 * CGFloat(level)
+        let x: CGFloat = 0.8 + CGFloat(index) * 3.5
+        let rect = NSRect(x: x, y: (18 - height) / 2, width: 2.4, height: height)
+        NSBezierPath(roundedRect: rect, xRadius: 1.2, yRadius: 1.2).fill()
       }
       return true
     }
