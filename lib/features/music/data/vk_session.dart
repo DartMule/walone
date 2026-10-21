@@ -43,12 +43,7 @@ class VkSession {
     if (_checkingLogin || _loginCompleted || !identical(_view, view)) return;
     _checkingLogin = true;
     try {
-      final raw = await view.evaluateJavaScript(
-        'JSON.stringify((() => {$_signedInScript})())',
-      );
-      Object? result = jsonDecode(raw ?? 'null');
-      if (result is String) result = jsonDecode(result);
-      if (result is Map<String, dynamic> && result['ok'] == true) {
+      if (await _isSignedIn(view)) {
         await _finishLogin(view);
       }
     } catch (_) {
@@ -56,6 +51,15 @@ class VkSession {
     } finally {
       _checkingLogin = false;
     }
+  }
+
+  Future<bool> _isSignedIn(Webview view) async {
+    final raw = await view.evaluateJavaScript(
+      'JSON.stringify((() => {$_signedInScript})())',
+    );
+    Object? result = jsonDecode(raw ?? 'null');
+    if (result is String) result = jsonDecode(result);
+    return result is Map<String, dynamic> && result['ok'] == true;
   }
 
   Future<void> _setLoginVisible(Webview view, bool visible) async {
@@ -219,12 +223,22 @@ class VkSession {
     view.launch(link.url);
     await Future<void>.delayed(const Duration(milliseconds: 500));
     final deadline = DateTime.now().add(const Duration(seconds: 30));
-    while (view.isNavigating.value && DateTime.now().isBefore(deadline)) {
+    var signedIn = false;
+    // VK восстанавливает данные сессии и после завершения навигации WebView.
+    while (DateTime.now().isBefore(deadline)) {
       worker.check();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      if (_closed) throw StateError('Окно VK закрыто');
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (view.isNavigating.value) continue;
+      try {
+        signedIn = await _isSignedIn(view);
+        if (signedIn) break;
+      } catch (_) {
+        // Перенаправление может заменить документ во время проверки.
+      }
     }
-    final signed = await evaluate(_signedInScript, {}, worker);
-    if (signed['ok'] != true) {
+    worker.check();
+    if (!signedIn) {
       _loginCompleted = false;
       _watchLogin(view);
       await _setLoginVisible(view, true);

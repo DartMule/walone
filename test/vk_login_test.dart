@@ -3,8 +3,11 @@ import 'dart:io';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:walone/features/music/data/vk_session.dart';
+import 'package:walone/features/music/data/music_process.dart';
+import 'package:walone/features/music/domain/import.dart';
 
 class LoginView implements Webview {
   final closed = Completer<void>();
@@ -37,8 +40,79 @@ class LoginView implements Webview {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class CatalogView extends LoginView {
+  @override
+  final ValueNotifier<bool> isNavigating = ValueNotifier(false);
+  Timer? ready;
+  bool catalogStarted = false;
+
+  @override
+  void launch(String url, {bool triggerOnUrlRequestEvent = true}) {
+    if (!url.contains('/audio')) return;
+    // Документ загружен, но VK ещё восстанавливает сессию в новой странице.
+    signedIn = false;
+    ready = Timer(const Duration(milliseconds: 900), () => signedIn = true);
+  }
+
+  @override
+  Future<String?> evaluateJavaScript(String script) async {
+    if (script.contains('const targetOwnerID')) catalogStarted = true;
+    if (script.startsWith('JSON.stringify(window[') && catalogStarted) {
+      return '{"tracks":[{"id":"1"}]}';
+    }
+    return super.evaluateJavaScript(script);
+  }
+
+  @override
+  void close() {
+    ready?.cancel();
+    isNavigating.dispose();
+    super.close();
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('Импорт ждёт восстановления VK-сессии после перехода', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('webview_window'),
+          (_) async => true,
+        );
+    final directory = await Directory.systemTemp.createTemp(
+      'walone-vk-catalog-',
+    );
+    final view = CatalogView()..signedIn = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('dev.soyjanks.walone/desktop'),
+          (call) async {
+            await view.setWebviewWindowVisibility(call.arguments as bool);
+            return null;
+          },
+        );
+    final session = VkSession(directory, createView: (_) async => view);
+    try {
+      await session.open();
+      await view.hidden.future.timeout(const Duration(seconds: 2));
+      final result = await session.catalog(
+        MusicLink.detect('https://vk.ru/audio123_1'),
+        MusicProcess(),
+        limit: 1,
+      );
+      expect(result['tracks'], hasLength(1));
+      expect(
+        view.visibility,
+        isNot(contains(true)),
+        reason:
+            'Подтверждённый вход не должен снова требоваться во время загрузки',
+      );
+    } finally {
+      session.dispose();
+      await directory.delete(recursive: true);
+    }
+  });
+
   test(
     'Вход без URL callback скрывает сайт и не открывает его повторно',
     () async {
