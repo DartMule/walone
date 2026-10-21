@@ -63,3 +63,40 @@ jobs:
         run: python3 tool/resource_queue.py flutter test --no-pub --concurrency=1
       - name: Build macOS
         run: python3 tool/resource_queue.py flutter build macos --release --no-pub
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install pinned Flutter SDK
+        shell: pwsh
+        run: |
+          $version = (Get-Content .fvmrc | ConvertFrom-Json).flutter
+          git clone --depth 1 --branch $version https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "$env:RUNNER_TEMP\flutter\bin" >> $env:GITHUB_PATH
+      - run: flutter pub get --enforce-lockfile
+      - name: Verify bundled resources
+        run: python tool/check_migration.py
+      - name: Analyze
+        run: flutter analyze --no-pub
+      - name: Test
+        run: flutter test --no-pub --concurrency=1
+      - name: Build Windows and QA installer
+        shell: pwsh
+        run: ./tool/windows_release.ps1 -Unsigned
+      - name: Check installer lifecycle
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem dist/windows/*-setup.exe)
+          if ($installers.Count -ne 1) { throw 'Expected one Windows installer' }
+          ./tool/windows_installer_smoke.ps1 -Installer $installers[0].FullName
+      - uses: actions/upload-artifact@v4
+        with:
+          name: walone-windows-x64-qa
+          path: |
+            dist/windows/*-setup.exe
+            dist/windows/*-setup.exe.sha256
+          if-no-files-found: error

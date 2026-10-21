@@ -9,6 +9,7 @@ import '../../keyboard/presentation/keyboard_cubit.dart';
 import '../../keyboard/presentation/keyboard_page.dart';
 import 'settings_cubit.dart';
 import 'theme_colors.dart';
+import 'windows_update_panel.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -29,6 +30,7 @@ class SettingsPage extends StatelessWidget {
           ),
           children: [
             const AppearanceSettings(),
+            if (Platform.isWindows) const WindowsUpdatePanel(),
             if (Platform.isMacOS) ...[
               SectionCard(
                 child: Column(
@@ -321,7 +323,7 @@ class AppearanceSettings extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               appearance.reduceTransparency
-                  ? 'В macOS включено «Уменьшение прозрачности». Эффекты объёма отключены; ваше значение сохранено.'
+                  ? 'В системе отключена прозрачность. Эффекты объёма отключены; ваше значение сохранено.'
                   : highContrast
                   ? 'В системе включён повышенный контраст. Эффекты объёма отключены; ваше значение сохранено.'
                   : appearance.followsSystem

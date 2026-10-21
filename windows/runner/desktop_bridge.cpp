@@ -88,6 +88,17 @@ DesktopBridge::DesktopBridge(HWND window, flutter::BinaryMessenger* messenger,
     if (call.method_name() == "accessibility") {
       flutter::EncodableMap settings{
           {flutter::EncodableValue("windowVisible"), flutter::EncodableValue(IsWindowVisible(window_) != FALSE)}};
+      DWORD transparency = 1;
+      DWORD bytes = sizeof(transparency);
+      RegGetValueW(HKEY_CURRENT_USER,
+          L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          L"EnableTransparency", RRF_RT_REG_DWORD, nullptr, &transparency, &bytes);
+      settings[flutter::EncodableValue("reduceTransparency")] =
+          flutter::EncodableValue(transparency == 0);
+      HIGHCONTRASTW contrast{sizeof(HIGHCONTRASTW)};
+      settings[flutter::EncodableValue("increaseContrast")] = flutter::EncodableValue(
+          SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(contrast), &contrast, 0) &&
+          (contrast.dwFlags & HCF_HIGHCONTRASTON) != 0);
       DWORD accent;
       BOOL opaque;
       if (SUCCEEDED(DwmGetColorizationColor(&accent, &opaque))) {

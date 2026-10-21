@@ -23,6 +23,8 @@ import 'features/music/presentation/music_logo.dart';
 import 'features/music/presentation/music_page.dart';
 import 'features/settings/presentation/settings_cubit.dart';
 import 'features/settings/presentation/settings_page.dart';
+import 'features/settings/data/windows_updates.dart';
+import 'features/settings/presentation/windows_update_panel.dart';
 import 'features/timer/presentation/timer_cubit.dart';
 import 'features/timer/data/timer_sound.dart';
 import 'features/timer/presentation/timer_colors.dart';
@@ -43,6 +45,7 @@ class _WorkspaceHostState extends State<WorkspaceHost> {
   AtmosphereCubit? _atmosphere;
   ImportCubit? _import;
   SettingsCubit? _settings;
+  WindowsUpdates? _updates;
   TimerCubit? _timer;
   final _timerSound = TimerSound();
   StatisticsCubit? _statistics;
@@ -114,6 +117,10 @@ class _WorkspaceHostState extends State<WorkspaceHost> {
       await statistics.initialize();
       if (!mounted || _closing != null) return;
       statistics.attach(music, atmosphere, timer: timer);
+      if (Platform.isWindows) {
+        _updates = WindowsUpdates(Directory(p.join(directory.path, 'Updates')));
+        unawaited(_updates!.check());
+      }
       setState(() => _ready = true);
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
@@ -138,6 +145,8 @@ class _WorkspaceHostState extends State<WorkspaceHost> {
     await _import?.close();
     await _atmosphere?.close();
     await _music?.close();
+    await _updates?.installOnExit();
+    _updates?.dispose();
   }();
   @override
   void dispose() {
@@ -170,7 +179,12 @@ class _WorkspaceHostState extends State<WorkspaceHost> {
         BlocProvider.value(value: _timer!),
         BlocProvider.value(value: _statistics!),
       ],
-      child: const WorkspacePage(),
+      child: _updates == null
+          ? const WorkspacePage()
+          : WindowsUpdateScope(
+              updates: _updates!,
+              child: const WorkspacePage(),
+            ),
     );
   }
 }
@@ -480,27 +494,30 @@ class WorkspaceSidebar extends StatelessWidget {
               ? Row(
                   children: [
                     Expanded(child: tile),
-                    BlocBuilder<SettingsCubit, SettingsState>(
-                      bloc: settings,
-                      builder: (context, state) => state.updateVersion == null
-                          ? const SizedBox.shrink()
-                          : IconButton(
-                              tooltip: state.updateReady
-                                  ? 'Обновить и перезапустить'
-                                  : 'Обновить до ${state.updateVersion}',
-                              onPressed: () =>
-                                  settings!.command('checkForUpdates'),
-                              color: theme.colorScheme.onSurfaceVariant,
-                              style: IconButton.styleFrom(
-                                shape: const CircleBorder(),
-                                minimumSize: const Size.square(36),
-                                padding: const EdgeInsets.all(8),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    if (Platform.isWindows) const WindowsUpdateButton(),
+                    if (Platform.isMacOS)
+                      BlocBuilder<SettingsCubit, SettingsState>(
+                        bloc: settings,
+                        builder: (context, state) => state.updateVersion == null
+                            ? const SizedBox.shrink()
+                            : IconButton(
+                                tooltip: state.updateReady
+                                    ? 'Обновить и перезапустить'
+                                    : 'Обновить до ${state.updateVersion}',
+                                onPressed: () =>
+                                    settings!.command('checkForUpdates'),
+                                color: theme.colorScheme.onSurfaceVariant,
+                                style: IconButton.styleFrom(
+                                  shape: const CircleBorder(),
+                                  minimumSize: const Size.square(36),
+                                  padding: const EdgeInsets.all(8),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                iconSize: 18,
+                                icon: const Icon(Icons.arrow_circle_up_rounded),
                               ),
-                              iconSize: 18,
-                              icon: const Icon(Icons.arrow_circle_up_rounded),
-                            ),
-                    ),
+                      ),
                   ],
                 )
               : tile,
