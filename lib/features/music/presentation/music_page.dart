@@ -989,6 +989,7 @@ class MusicPlayerBar extends StatelessWidget {
                   value: track == null ? 0 : position,
                   max: track?.duration ?? 1,
                   label: 'Позиция',
+                  live: false,
                   compact: true,
                   showValue: false,
                   onChanged: track == null || track.duration <= 0
@@ -1106,6 +1107,7 @@ class MusicPlayerBar extends StatelessWidget {
                               value: position,
                               max: track.duration,
                               label: 'Позиция',
+                              live: false,
                               onChanged: cubit.seek,
                             ),
                           ),

@@ -144,6 +144,27 @@ DesktopBridge::DesktopBridge(HWND window, flutter::BinaryMessenger* messenger,
         Shell_NotifyIconW(NIM_MODIFY, &icon_);
       } else if (method == "updateMusicTray") {
         UpdateMusicTray(call.arguments());
+      } else if (method == "startWaveform") {
+        const auto* data = call.arguments() ? std::get_if<flutter::EncodableMap>(call.arguments()) : nullptr;
+        if (!data || Text(*data, "id").empty() || Text(*data, "path").empty())
+          throw std::runtime_error("Ожидается путь музыкального файла");
+        waveform_.reset();
+        waveform_id_ = Text(*data, "id");
+        waveform_ = std::make_unique<MusicWaveformReader>(Wide(Text(*data, "path")));
+      } else if (method == "readWaveform" || method == "stopWaveform") {
+        const auto* id = call.arguments() ? std::get_if<std::string>(call.arguments()) : nullptr;
+        if (!id) throw std::runtime_error("Ожидается идентификатор визуализации");
+        if (method == "stopWaveform") {
+          if (*id == waveform_id_) waveform_.reset();
+        } else {
+          const auto batch = waveform_ && *id == waveform_id_
+              ? waveform_->Read() : MusicWaveformReader::Batch{{}, true, false};
+          result->Success(flutter::EncodableValue(flutter::EncodableMap{
+              {flutter::EncodableValue("levels"), flutter::EncodableValue(batch.levels)},
+              {flutter::EncodableValue("done"), flutter::EncodableValue(batch.done)},
+              {flutter::EncodableValue("failed"), flutter::EncodableValue(batch.failed)}}));
+          return;
+        }
       } else if (method == "updatePlayerTray") {
         const auto* data = call.arguments() ? std::get_if<flutter::EncodableMap>(call.arguments()) : nullptr;
         if (!data) throw std::runtime_error("Ожидается состояние плеера");

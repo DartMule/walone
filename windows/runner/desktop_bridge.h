@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "music_waveform.h"
 
 class DesktopBridge {
  public:
@@ -49,6 +50,8 @@ class DesktopBridge {
   std::array<double, 4> volumes_{0.7, 0.7, 1, 0.35};
   bool keyboard_volume_enabled_ = false;
   std::array<double, 5> music_levels_{2.0 / 12, 7.0 / 12, 1, 7.0 / 12, 2.0 / 12};
+  std::unique_ptr<MusicWaveformReader> waveform_;
+  std::string waveform_id_;
   bool paused_ = false;
   bool running_ = false;
   std::string selected_;

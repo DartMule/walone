@@ -516,6 +516,7 @@ class _MusicSplitDialogState extends State<MusicSplitDialog> {
                       value: _position,
                       max: widget.track.duration,
                       label: 'Позиция записи',
+                      live: false,
                       onChanged: _ready && !importing.busy
                           ? (value) => _audio.seek(
                               Duration(microseconds: (value * 1000000).round()),

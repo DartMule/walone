@@ -387,7 +387,7 @@ class GainSlider extends StatefulWidget {
     required this.onChanged,
     this.label = 'Громкость',
     this.max = 1,
-    this.live = false,
+    this.live = true,
     this.compact = false,
     this.showValue = true,
   });

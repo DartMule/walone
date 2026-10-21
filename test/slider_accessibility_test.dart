@@ -57,6 +57,11 @@ void main() {
         await tester.pump();
         final dragged = tester.widget<CupertinoSlider>(slider).value;
         expect(dragged, greaterThan(value));
+        expect(
+          requested,
+          closeTo(dragged, 0.001),
+          reason: 'Громкость применяется до отпускания указателя',
+        );
         await drag.up();
         await tester.pump(const Duration(milliseconds: 100));
         expect(requested, closeTo(dragged, 0.001));
@@ -169,6 +174,7 @@ void main() {
             home: Scaffold(
               body: GainSlider(
                 value: 0.4,
+                live: false,
                 label: 'Уровень',
                 onChanged: changed.add,
               ),

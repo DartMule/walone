@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'music_process.dart';
 
@@ -31,11 +33,46 @@ class MusicWaveform {
 
   Process? _process;
   bool _cancelled = false;
+  static const _channel = MethodChannel('dev.soyjanks.walone/desktop');
+  static int _nextID = 0;
+  String? _nativeID;
+
+  Future<void> _loadWindows(String path) async {
+    final id = _nativeID = '${++_nextID}';
+    try {
+      await _channel.invokeMethod<void>('startWaveform', {
+        'id': id,
+        'path': path,
+      });
+      final deadline = Stopwatch()..start();
+      while (!_cancelled && deadline.elapsed < const Duration(minutes: 2)) {
+        final data = await _channel.invokeMapMethod<String, dynamic>(
+          'readWaveform',
+          id,
+        );
+        if (_cancelled) return;
+        if (data == null || data['failed'] == true) {
+          _clear();
+          return;
+        }
+        addLevels((data['levels'] as List).cast<double>());
+        if (data['done'] == true) return;
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    } finally {
+      await _channel.invokeMethod<void>('stopWaveform', id);
+      _nativeID = null;
+    }
+  }
 
   Future<void> load(String path) async {
     if (_cancelled) return;
     Timer? deadline;
     try {
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        await _loadWindows(path);
+        return;
+      }
       final executable = await MusicProcess.executable('ffmpeg');
       if (_cancelled) return;
       final process = await Process.start(executable, [
@@ -68,7 +105,7 @@ class MusicWaveform {
       await errors;
       if (code != 0) _clear();
     } catch (_) {
-      // Визуализация необязательна: отсутствие FFmpeg не мешает музыке.
+      // Отказ декодера визуализации не мешает воспроизведению музыки.
       _clear();
     } finally {
       deadline?.cancel();
@@ -79,6 +116,14 @@ class MusicWaveform {
   void cancel() {
     _cancelled = true;
     _process?.kill();
+    final id = _nativeID;
+    if (id != null) {
+      unawaited(
+        _channel
+            .invokeMethod<void>('stopWaveform', id)
+            .catchError((Object _) {}),
+      );
+    }
     _clear();
   }
 
