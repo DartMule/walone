@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,26 +30,28 @@ void main() {
       expect(find.text('Проверка печати'), findsOneWidget);
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
-      const sensor = MethodChannel('dev.soyjanks.walone/keyboard');
-      final experiment = await sensor.invokeMapMethod<String, dynamic>(
-        'sensorStatus',
-      );
-      expect(experiment!['stage'], isIn([0, 1, 2]));
-      expect(experiment['summary'], isA<String>());
-      await expectLater(
-        sensor.invokeMethod<void>('sensorConfigure', {
-          'enabled': true,
-          'sensitivity': -1.0,
-          'stage': 0,
-          'collecting': false,
-        }),
-        throwsA(isA<PlatformException>()),
-      );
-      final unchanged = await sensor.invokeMapMethod<String, dynamic>(
-        'sensorStatus',
-      );
-      expect(unchanged!['sensitivity'], experiment['sensitivity']);
-      expect(unchanged['enabled'], experiment['enabled']);
+      if (Platform.isMacOS) {
+        const sensor = MethodChannel('dev.soyjanks.walone/keyboard');
+        final experiment = await sensor.invokeMapMethod<String, dynamic>(
+          'sensorStatus',
+        );
+        expect(experiment!['stage'], isIn([0, 1, 2]));
+        expect(experiment['summary'], isA<String>());
+        await expectLater(
+          sensor.invokeMethod<void>('sensorConfigure', {
+            'enabled': true,
+            'sensitivity': -1.0,
+            'stage': 0,
+            'collecting': false,
+          }),
+          throwsA(isA<PlatformException>()),
+        );
+        final unchanged = await sensor.invokeMapMethod<String, dynamic>(
+          'sensorStatus',
+        );
+        expect(unchanged!['sensitivity'], experiment['sensitivity']);
+        expect(unchanged['enabled'], experiment['enabled']);
+      }
       const repository = NativeKeyboardRepository();
       final packs = await repository.loadCatalog();
       expect(packs, hasLength(20));

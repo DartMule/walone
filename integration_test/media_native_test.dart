@@ -19,6 +19,8 @@ import 'package:walone/features/music/data/music_repository.dart';
 import 'package:walone/features/music/data/vk_session.dart';
 import 'package:walone/features/music/presentation/import_cubit.dart';
 import 'package:walone/features/music/presentation/music_cubit.dart';
+import 'package:walone/features/timer/data/timer_sound.dart';
+import 'package:walone/features/timer/presentation/timer_cubit.dart';
 
 class _CompletionAudio extends DesktopAudio {
   final disposed = Completer<void>();
@@ -32,6 +34,21 @@ class _CompletionAudio extends DesktopAudio {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('Нативные сигналы работы и отдыха освобождают плееры', (
+    tester,
+  ) async {
+    for (final phase in PomodoroPhase.values) {
+      final audio = _CompletionAudio();
+      await audio.setVolume(0);
+      final sound = TimerSound(factory: () => audio);
+      try {
+        await sound.play(phase);
+        await audio.disposed.future.timeout(const Duration(seconds: 10));
+      } finally {
+        await sound.dispose();
+      }
+    }
+  });
   testWidgets('Нативный рендерер рисует стекло шейдером над реальным фоном', (
     tester,
   ) async {

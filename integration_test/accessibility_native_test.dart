@@ -18,6 +18,7 @@ import 'package:walone/features/music/presentation/import_cubit.dart';
 import 'package:walone/features/music/presentation/music_cubit.dart';
 import 'package:walone/features/settings/presentation/settings_cubit.dart';
 import 'package:walone/features/settings/presentation/settings_page.dart';
+import 'package:walone/features/timer/presentation/timer_cubit.dart';
 import 'package:walone/workspace.dart';
 
 import '../test/media_fakes.dart';
@@ -33,7 +34,7 @@ class AccessibilityIntegrationBinding
 
 void main() {
   final binding = AccessibilityIntegrationBinding();
-  testWidgets('30 циклов разделов и обновлений с настоящим нативным AXTree', (
+  testWidgets('30 циклов разделов и обновлений с нативным деревом доступности', (
     tester,
   ) async {
     // Данные и звук изолированы; дерево доступности передаётся настоящему движку.
@@ -56,7 +57,8 @@ void main() {
     );
     await atmosphere.initialize();
     final importer = ImportCubit(music, FakeVkSession(root));
-    final settings = SettingsCubit(atmosphere);
+    final timer = TimerCubit();
+    final settings = SettingsCubit(atmosphere, timer: timer);
     await settings.initialize();
     final source = await File('${root.path}/player.wav').writeAsString('10');
     final track = await repository.prepareFile(source.path);
@@ -67,6 +69,7 @@ void main() {
     );
 
     final appearanceStore = JsonStore(File('${root.path}/appearance.json'));
+    await appearanceStore.write({'followSystem': true, 'compactPlayer': false});
     final semantics = tester.ensureSemantics();
     try {
       await tester.pumpWidget(
@@ -77,6 +80,7 @@ void main() {
             BlocProvider.value(value: atmosphere),
             BlocProvider.value(value: importer),
             BlocProvider.value(value: settings),
+            BlocProvider.value(value: timer),
           ],
           child: MaterialApp(
             theme: ThemeData(useMaterial3: true),
@@ -92,24 +96,33 @@ void main() {
       final native = await appearanceChannel.invokeMapMethod<String, dynamic>(
         'accessibility',
       );
-      final nativeTint = native!['glassTint'] as num;
-      expect(nativeTint.isFinite && nativeTint >= 0 && nativeTint <= 1, isTrue);
+      final nativeTint = native!['glassTint'] as num?;
+      if (Platform.isMacOS) {
+        final tint = nativeTint!;
+        expect(tint.isFinite && tint >= 0 && tint <= 1, isTrue);
+      } else {
+        expect(nativeTint, isNull);
+      }
       await tester.tap(
         find.descendant(
           of: find.byType(WorkspaceSidebar),
-          matching: find.text('Настройки'),
+          matching: find.widgetWithText(ListTile, 'Настройки'),
         ),
       );
       await tester.pumpAndSettle();
       expect(find.byType(AppearanceSettings), findsOneWidget);
-      expect(find.text('Управляется macOS'), findsOneWidget);
-      await tester.tap(
-        find.widgetWithText(
-          CheckboxListTile,
-          'Автоматически по материалу macOS',
-        ),
+      final automaticGlass = find.widgetWithText(
+        CheckboxListTile,
+        'Автоматически по материалу macOS',
       );
-      await tester.pumpAndSettle();
+      if (Platform.isMacOS) {
+        expect(find.text('Управляется macOS'), findsOneWidget);
+        await tester.tap(automaticGlass);
+        await tester.pumpAndSettle();
+      } else {
+        expect(find.text('Управляется macOS'), findsNothing);
+        expect(automaticGlass, findsNothing);
+      }
       final glassSlider = find.byWidgetPredicate(
         (widget) =>
             widget is GainSlider && widget.label == 'Глубина интерфейса',
@@ -157,30 +170,36 @@ void main() {
       expect(manual, lessThan(0.3));
       final savedAppearance = await appearanceStore.read();
       expect(savedAppearance!['transparency'], manual);
-      expect(savedAppearance['followSystem'], false);
-      await tester.tap(
-        find.widgetWithText(
-          CheckboxListTile,
-          'Автоматически по материалу macOS',
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(appearanceState.followsSystem, isTrue);
-      expect(
-        appearanceState.transparency(tester.element(glassSlider)),
-        native['reduceTransparency'] == true
-            ? 0
-            : closeTo(1 - nativeTint, 0.001),
-      );
+      if (Platform.isMacOS) {
+        expect(savedAppearance['followSystem'], false);
+        await tester.tap(automaticGlass);
+        await tester.pumpAndSettle();
+        expect(appearanceState.followsSystem, isTrue);
+        expect(
+          appearanceState.transparency(tester.element(glassSlider)),
+          native['reduceTransparency'] == true
+              ? 0
+              : closeTo(1 - nativeTint!, 0.001),
+        );
+      } else {
+        expect(appearanceState.systemAvailable, isFalse);
+        expect(appearanceState.followsSystem, isFalse);
+        expect(
+          appearanceState.transparency(tester.element(glassSlider)),
+          manual,
+        );
+      }
       await tester.tap(
         find.descendant(
           of: find.byType(WorkspaceSidebar),
-          matching: find.text('Атмосфера'),
+          matching: find.widgetWithText(ListTile, 'Атмосфера'),
         ),
       );
       await tester.pumpAndSettle();
       debugPrint(
-        'Native glass: системное значение прочитано; ручное значение сохранено; синхронизация восстановлена',
+        Platform.isMacOS
+            ? 'Native glass: системное значение прочитано; ручное значение сохранено; синхронизация восстановлена'
+            : 'Native glass: ручной режим Windows и сохранение значения проверены',
       );
       final volumeBefore = music.state.library.volume;
       final volume = find.byWidgetPredicate(
@@ -263,7 +282,12 @@ void main() {
               ? find.byType(WorkspaceSidebar)
               : find.byType(NavigationBar);
           await tester.tap(
-            find.descendant(of: navigation, matching: find.text(title)),
+            find.descendant(
+              of: navigation,
+              matching: find.byType(WorkspaceSidebar).evaluate().isNotEmpty
+                  ? find.widgetWithText(ListTile, title)
+                  : find.text(title),
+            ),
           );
           await tester.pump(const Duration(milliseconds: 350));
           await tester.pump();
@@ -294,6 +318,7 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       semantics.dispose();
       await settings.close();
+      await timer.close();
       await importer.close();
       await atmosphere.close();
       await music.close();
