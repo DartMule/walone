@@ -6,6 +6,12 @@ import ServiceManagement
 // Walone рисует sRGB; используем BGRA8, сохраняя Impeller и нативное разрешение.
 // Это внутренний selector FlutterDartProject: проверять при обновлении Flutter.
 class WaloneDartProject: FlutterDartProject {
+  // Flutter ищет ICU в bundle динамического класса; наш подкласс живёт в Runner.
+  // Данные Unicode остаются ресурсом FlutterMacOS.framework.
+  @objc var ICUDataPath: String? {
+    Bundle(for: FlutterDartProject.self).path(forResource: "icudtl", ofType: "dat")
+  }
+
   @objc var enableWideGamut: Bool {
     Bundle.main.object(forInfoDictionaryKey: "WaloneEnableWideGamut") as? Bool ?? false
   }

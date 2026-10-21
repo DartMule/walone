@@ -37,6 +37,11 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(project.value(forKey: "enableImpeller") as? Bool, true)
     XCTAssertTrue(FlutterDartProject.instancesRespond(to: NSSelectorFromString("enableSDFs")))
     XCTAssertEqual(project.value(forKey: "enableSDFs") as? Bool, true)
+    // Данные Unicode нужны для позиции курсора и границ символов.
+    let icuPath = project.value(forKey: "ICUDataPath") as? String
+    XCTAssertNotNil(icuPath)
+    XCTAssertEqual(icuPath, FlutterDartProject().value(forKey: "ICUDataPath") as? String)
+    if let icuPath { XCTAssertTrue(FileManager.default.fileExists(atPath: icuPath)) }
   }
 
   func testTrayOpensHiddenWindowAndReflectsPlayerAndTimerState() {
