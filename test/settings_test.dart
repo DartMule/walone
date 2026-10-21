@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:walone/workspace.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path/path.dart' as p;
 import 'package:walone/core/storage.dart';
 import 'package:walone/features/atmosphere/data/atmosphere_audio.dart';
@@ -13,10 +14,29 @@ import 'package:walone/features/keyboard/presentation/keyboard_cubit.dart';
 import 'package:walone/features/music/data/music_repository.dart';
 import 'package:walone/features/music/presentation/music_cubit.dart';
 import 'package:walone/features/settings/presentation/settings_cubit.dart';
+import 'package:walone/features/settings/data/windows_updates.dart';
+import 'package:walone/features/settings/presentation/windows_update_panel.dart';
 
 import 'package:walone/features/timer/presentation/timer_cubit.dart';
 
 import 'media_fakes.dart';
+
+class _Updates extends WindowsUpdates {
+  _Updates(super.directory);
+
+  void available(bool value) {
+    ready = value;
+    release = value
+        ? WindowsRelease(
+            '0.1.1+2',
+            Uri.https('github.com', '/update.exe'),
+            '',
+            1,
+          )
+        : null;
+    notifyListeners();
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -165,24 +185,40 @@ void main() {
     testWidgets('Кнопка обновления рядом с настройками: $brightness', (
       tester,
     ) async {
+      final updates = _Updates(root);
+      addTearDown(updates.dispose);
       await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(brightness: brightness),
-          home: Scaffold(
-            body: WorkspaceSidebar(
-              selected: 0,
-              onSelected: (_) {},
-              settings: settings,
+        BlocProvider.value(
+          value: settings,
+          child: WindowsUpdateScope(
+            updates: updates,
+            child: MaterialApp(
+              theme: ThemeData(brightness: brightness),
+              home: Scaffold(
+                body: WorkspaceSidebar(
+                  selected: 0,
+                  onSelected: (_) {},
+                  settings: settings,
+                ),
+              ),
             ),
           ),
         ),
       );
       expect(find.byIcon(Icons.arrow_circle_up_rounded), findsNothing);
-      await tester.runAsync(
-        () => action('updateStatus', version: '0.1.1', ready: false),
-      );
+      if (Platform.isWindows) {
+        updates.available(true);
+      } else {
+        await tester.runAsync(
+          () => action('updateStatus', version: '0.1.1', ready: false),
+        );
+      }
       await tester.pump();
-      final button = find.byTooltip('Обновить до 0.1.1');
+      final button = find.byTooltip(
+        Platform.isWindows
+            ? 'Обновить до 0.1.1+2 и перезапустить'
+            : 'Обновить до 0.1.1',
+      );
       expect(button, findsOneWidget);
       expect(find.byIcon(Icons.arrow_circle_up_rounded), findsOneWidget);
       expect(tester.getSize(button), const Size.square(36));
@@ -198,14 +234,20 @@ void main() {
         ),
       );
       await tester.tap(button);
-      expect(calls.last.method, 'checkForUpdates');
-      await tester.runAsync(
-        () => action('updateStatus', version: '0.1.1', ready: true),
-      );
-      await tester.pump();
-      await tester.tap(find.byTooltip('Обновить и перезапустить'));
-      expect(calls.last.method, 'checkForUpdates');
-      await tester.runAsync(() => action('updateStatus'));
+      if (Platform.isWindows) {
+        expect(calls.last.method, 'quit');
+        expect(updates.restartAfterUpdate, isTrue);
+        updates.available(false);
+      } else {
+        expect(calls.last.method, 'checkForUpdates');
+        await tester.runAsync(
+          () => action('updateStatus', version: '0.1.1', ready: true),
+        );
+        await tester.pump();
+        await tester.tap(find.byTooltip('Обновить и перезапустить'));
+        expect(calls.last.method, 'checkForUpdates');
+        await tester.runAsync(() => action('updateStatus'));
+      }
       await tester.pump();
       expect(find.byIcon(Icons.arrow_circle_up_rounded), findsNothing);
       expect(tester.takeException(), isNull);
