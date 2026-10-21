@@ -6,34 +6,71 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../../../core/audio.dart';
-import '../../../core/storage.dart';
 import '../domain/music.dart';
 import 'music_archive.dart';
+import 'music_database.dart';
 
 class MusicRepository {
-  MusicRepository(this.directory, {this.audioFactory = DesktopAudio.new})
-    : store = JsonStore(File(p.join(directory.path, 'library.json')));
+  MusicRepository(this.directory, {this.audioFactory = DesktopAudio.new});
   final Directory directory;
-  final JsonStore store;
   final AudioFactory audioFactory;
+  MusicDatabase? _database;
+  Future<void>? _initialization;
   MusicLibrary library = MusicLibrary();
 
-  Future<void> initialize() async {
+  MusicDatabase get database => _database ??= MusicDatabase.open(
+    File(p.join(directory.path, 'library.sqlite')),
+  );
+
+  Future<void> initialize() => _initialization ??= _initialize();
+
+  Future<void> _initialize() async {
     try {
-      final json = await store.read();
-      if (json != null) library = MusicLibrary.fromJson(json);
-    } catch (_) {
-      store.protect();
+      await directory.create(recursive: true);
+      final saved = await database.load();
+      if (saved != null) {
+        library = saved;
+        return;
+      }
+      var initial = MusicLibrary();
+      final legacy = File(p.join(directory.path, 'library.json'));
+      if (await legacy.exists()) {
+        if (await legacy.length() > MusicArchive.maxManifest) {
+          throw const FormatException('Слишком большой манифест');
+        }
+        final bytes = await legacy.readAsBytes();
+        initial = MusicLibrary.fromJson(
+          jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>,
+        );
+        final backup = File(
+          '${legacy.path}.before-sqlite-${const Uuid().v4()}.bak',
+        );
+        final temporary = File('${backup.path}.tmp');
+        try {
+          await temporary.writeAsBytes(bytes, flush: true);
+          await temporary.rename(backup.path);
+        } finally {
+          if (await temporary.exists()) await temporary.delete();
+        }
+      }
+      library = await database.initializeLibrary(initial);
+    } catch (error) {
       throw StateError(
-        'Медиатека повреждена. Файлы сохранены без перезаписи: ${directory.path}',
+        'Не удалось открыть или перенести медиатеку. '
+        'Исходные файлы сохранены: ${directory.path}. $error',
       );
     }
   }
 
   Future<void> commit(MusicLibrary next) async {
-    MusicLibrary.fromJson(next.toJson());
-    await store.write(next.toJson());
+    await initialize();
+    await database.save(next, library);
     library = next;
+  }
+
+  Future<void> close() async {
+    await _database?.close();
+    _database = null;
   }
 
   String pathFor(MusicTrack track) => p.join(directory.path, track.filename);
@@ -42,6 +79,7 @@ class MusicRepository {
     String destination, {
     void Function()? check,
   }) async {
+    await initialize();
     final target = p.normalize(p.absolute(destination));
     final root = p.normalize(p.absolute(directory.path));
     if (p.equals(root, target) || p.isWithin(root, target)) {
@@ -57,13 +95,24 @@ class MusicRepository {
     }
   }
 
-  Future<void> importArchive(String source, {void Function()? check}) async {
-    await directory.create(recursive: true);
+  Future<void> importArchive(
+    String source, {
+    void Function()? check,
+    Future<String> Function(String)? resolveArtist,
+  }) async {
+    await initialize();
     final staging = await directory.createTemp('.archive-');
     final copied = <File>[];
     try {
       final imported = await MusicArchive.read(source, staging.path);
       check?.call();
+      final artists = <String, String>{};
+      for (final name in imported.artists) {
+        check?.call();
+        artists[name] = resolveArtist == null
+            ? name
+            : await resolveArtist(name);
+      }
       final known = {for (final track in library.tracks) track.id: track};
       for (final track in imported.tracks) {
         check?.call();
@@ -80,6 +129,7 @@ class MusicRepository {
           filename: filename,
           duration: track.duration,
           sourceID: track.sourceID,
+          artists: [for (final name in track.artists) artists[name] ?? name],
         );
       }
       final playlists = [
@@ -93,6 +143,15 @@ class MusicRepository {
       check?.call();
       final next = library.copyWith(
         tracks: known.values.toList(),
+        artists: {...library.artists, ...artists.values}.toList(),
+        playingID:
+            library.artists.any(
+              (name) =>
+                  artistMusicID(name) == library.playingID &&
+                  !(known[library.trackID]?.artists.contains(name) ?? false),
+            )
+            ? allMusicID
+            : library.playingID,
         playlists: [...library.playlists, ...playlists],
         selectedID: playlists.firstOrNull?.id ?? library.selectedID,
       );
@@ -114,6 +173,8 @@ class MusicRepository {
     String path, {
     String? title,
     String? sourceID,
+    String artist = '',
+    List<String>? artists,
   }) async {
     if (await FileSystemEntity.type(path, followLinks: false) !=
         FileSystemEntityType.file) {
@@ -151,6 +212,8 @@ class MusicRepository {
         filename: filename,
         duration: duration.inMicroseconds / Duration.microsecondsPerSecond,
         sourceID: sourceID,
+        artist: artist,
+        artists: artists,
       );
     } finally {
       await probe.dispose();
@@ -166,17 +229,5 @@ class MusicRepository {
         await File(pathFor(track)).delete();
       }
     }
-  }
-
-  Future<void> removeUnused(MusicLibrary proposed) async {
-    final used = proposed.playlists.expand((p) => p.trackIDs).toSet();
-    final removed = proposed.tracks.where((t) => !used.contains(t.id)).toList();
-    await commit(
-      proposed.copyWith(
-        tracks: proposed.tracks.where((t) => used.contains(t.id)).toList(),
-      ),
-    );
-    // Сначала атомарно сохраняем состав, затем удаляем только наши копии.
-    await discard(removed);
   }
 }

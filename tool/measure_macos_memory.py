@@ -125,11 +125,14 @@ def main():
                 if library.exists():
                     (data / "Music").mkdir()
                     shutil.copy2(library, data / "Music/library.json")
-                database = source_data / "statistics.sqlite"
-                if database.exists():
-                    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as src:
-                        with sqlite3.connect(data / database.name) as dst:
-                            src.backup(dst)
+                for relative in ("statistics.sqlite", "Music/library.sqlite"):
+                    database = source_data / relative
+                    if database.exists():
+                        target = data / relative
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as src:
+                            with sqlite3.connect(target) as dst:
+                                src.backup(dst)
                 with (args.output / f"run-{index + 1}.log").open("w") as log:
                     environment = dict(os.environ)
                     if args.probe:

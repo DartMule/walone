@@ -21,7 +21,7 @@ class _Music extends MusicCubit {
   void playing(bool value) => emit(
     MusicState(
       library: MusicLibrary(
-        tracks: const [
+        tracks: [
           MusicTrack(
             id: 'test',
             title: 'Test',

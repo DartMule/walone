@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'music.dart';
+
 class AudioSection {
   const AudioSection(this.start, this.end, this.title);
   final double start;
@@ -86,7 +88,7 @@ class AudioSection {
   }
 }
 
-enum ImportProvider { youtube, soundcloud, vk }
+enum ImportProvider { youtube, soundcloud, vk, spotify }
 
 class MusicLink {
   const MusicLink({
@@ -113,6 +115,7 @@ class MusicLink {
       'music.youtube.com' ||
       'youtu.be' ||
       'www.youtu.be' => ImportProvider.youtube,
+      'open.spotify.com' => ImportProvider.spotify,
       'soundcloud.com' ||
       'www.soundcloud.com' ||
       'm.soundcloud.com' => ImportProvider.soundcloud,
@@ -123,7 +126,7 @@ class MusicLink {
       'www.vk.com' ||
       'www.vk.ru' => ImportProvider.vk,
       _ => throw const FormatException(
-        'Источник не поддерживается. Вставьте ссылку YouTube, SoundCloud или VK.',
+        'Источник не поддерживается. Вставьте ссылку YouTube, SoundCloud, VK или Spotify.',
       ),
     };
     return parse(provider, text);
@@ -139,6 +142,25 @@ class MusicLink {
       throw const FormatException('Вставьте корректную HTTPS-ссылку');
     }
     final host = uri.host.toLowerCase();
+    if (provider == ImportProvider.spotify) {
+      final parts = uri.pathSegments
+          .where((p) => !p.startsWith('intl-'))
+          .toList();
+      if (host != 'open.spotify.com' ||
+          parts.length != 2 ||
+          !['track', 'playlist', 'album'].contains(parts[0]) ||
+          !RegExp(r'^[A-Za-z0-9]{22}$').hasMatch(parts[1])) {
+        throw const FormatException(
+          'Нужна ссылка на трек, альбом или плейлист Spotify',
+        );
+      }
+      return MusicLink(
+        provider: provider,
+        url: 'https://open.spotify.com/${parts.join('/')}',
+        id: parts[1],
+        playlist: parts[0] != 'track',
+      );
+    }
     if (provider == ImportProvider.youtube) {
       if (![
         'youtube.com',
@@ -149,6 +171,21 @@ class MusicLink {
         'www.youtu.be',
       ].contains(host)) {
         throw const FormatException('Нужна ссылка YouTube');
+      }
+      final list = uri.queryParameters['list'];
+      if (list != null &&
+          (uri.path == '/playlist' ||
+              uri.path == '/watch' ||
+              host.endsWith('youtu.be'))) {
+        if (!RegExp(r'^[A-Za-z0-9_-]{10,100}$').hasMatch(list)) {
+          throw const FormatException('Некорректный ID плейлиста');
+        }
+        return MusicLink(
+          provider: provider,
+          url: 'https://www.youtube.com/playlist?list=$list',
+          id: list,
+          playlist: true,
+        );
       }
       final parts = uri.pathSegments;
       final id = host.endsWith('youtu.be') && parts.length == 1
@@ -201,6 +238,21 @@ class MusicLink {
     ].contains(host)) {
       throw const FormatException('Нужна ссылка VK');
     }
+    final collection = RegExp(r'^/audios(-?\d+)/?$').firstMatch(uri.path);
+    if (collection != null ||
+        ['/music', '/audio', '/audios'].contains(uri.path) &&
+            uri.queryParameters.isEmpty) {
+      final owner = collection?[1] ?? '';
+      return MusicLink(
+        provider: provider,
+        url: owner.isEmpty
+            ? 'https://m.vk.ru/audio'
+            : 'https://m.vk.ru/audios$owner',
+        id: 'all',
+        owner: owner,
+        playlist: true,
+      );
+    }
     var path = uri.queryParameters['z']?.startsWith('audio_playlist') == true
         ? uri.queryParameters['z']!.replaceAll('/', '_')
         : uri.path;
@@ -234,4 +286,76 @@ class MusicLink {
           'https://m.vk.ru/${playlist ? 'audio?act=audio_playlist$owner' : 'audio$owner'}_$id$key',
     );
   }
+}
+
+// Явные маркеры совместной записи; запятая и & могут быть частью имени.
+List<String> splitArtistNames(String text) => cleanArtistNames(
+  text.split(
+    RegExp(r'\s+(?:feat\.?|ft\.?|featuring)\s+|[;\n]', caseSensitive: false),
+  ),
+);
+
+List<String> metadataArtistNames(Map<String, dynamic> row) {
+  final names = row['artists'];
+  if (names is List && names.isNotEmpty) {
+    return cleanArtistNames(names.cast<String>());
+  }
+  return splitArtistNames(
+    row['artist'] as String? ?? row['creator'] as String? ?? '',
+  );
+}
+
+({String title, List<String> artists}) trackDetails(Map<String, dynamic> row) {
+  var title = (row['track'] as String? ?? row['title'] as String? ?? 'Трек')
+      .trim();
+  var artists = metadataArtistNames(row);
+  if (artists.isEmpty) {
+    final parts = title.split(RegExp(r'\s+[—–-]\s+'));
+    if (parts.length == 2 && parts.every((s) => s.trim().isNotEmpty)) {
+      artists = splitArtistNames(parts[0]);
+      title = parts[1].trim();
+    }
+  }
+  return (title: title, artists: artists);
+}
+
+bool spotifyMatch(Map<String, dynamic> song, Map<String, dynamic> candidate) {
+  Set<String> words(String text) => text
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ')
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty)
+      .toSet();
+  final title = words(song['name'] as String);
+  final artist = words(song['artist'] as String);
+  final found = words(
+    '${candidate['title'] ?? ''} ${candidate['artist'] ?? candidate['uploader'] ?? candidate['channel'] ?? ''}',
+  );
+  final duration = candidate['duration'];
+  final expected = song['duration'];
+  if (duration is! num ||
+      expected is! num ||
+      expected <= 0 ||
+      (duration - expected).abs() >
+          (expected * 0.05 > 8 ? expected * 0.05 : 8)) {
+    return false;
+  }
+  if (title.isEmpty ||
+      artist.isEmpty ||
+      !found.containsAll(title) ||
+      !artist.every(found.contains)) {
+    return false;
+  }
+  for (final version in [
+    'live',
+    'remix',
+    'cover',
+    'karaoke',
+    'sped',
+    'slowed',
+  ]) {
+    if (found.contains(version) && !title.contains(version)) return false;
+  }
+  return true;
 }

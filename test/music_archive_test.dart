@@ -66,7 +66,11 @@ void main() {
     );
   });
 
-  tearDown(() => root.delete(recursive: true));
+  tearDown(() async {
+    await source.close();
+    await destination.close();
+    await root.delete(recursive: true);
+  });
 
   Future<void> changeArchive(void Function(Archive) change) async {
     final archive = ZipDecoder().decodeBytes(await zip.readAsBytes());
@@ -187,6 +191,7 @@ void main() {
     'Перенос на другой ПК сохраняет имена, списки, порядок и аудио',
     () async {
       // Исходная папка и файлы больше недоступны принимающему ПК.
+      await source.close();
       await source.directory.delete(recursive: true);
       final music = MusicCubit(destination);
       await music.initialize();
@@ -220,6 +225,7 @@ void main() {
       expect(music.state.error, isNull);
       await music.close();
       final reopened = MusicRepository(destination.directory);
+      addTearDown(reopened.close);
       await reopened.initialize();
       expect(reopened.library.toJson(), destination.library.toJson());
     },
@@ -278,7 +284,7 @@ void main() {
   ]) {
     test('Повреждённый архив ($kind) не меняет медиатеку', () async {
       await destination.commit(MusicLibrary());
-      final before = await destination.store.file.readAsString();
+      final before = (await destination.database.load())!.toJson();
       await changeArchive((archive) {
         switch (kind) {
           case 'audio':
@@ -324,7 +330,7 @@ void main() {
         destination.importArchive(zip.path),
         throwsFormatException,
       );
-      expect(await destination.store.file.readAsString(), before);
+      expect((await destination.database.load())!.toJson(), before);
       expect(await destination.directory.list().length, 1);
       expect(await File(p.join(root.path, 'outside.txt')).exists(), isFalse);
     });
@@ -334,7 +340,7 @@ void main() {
     'Ошибка сохранения или отмена убирает только новые аудиокопии',
     () async {
       await destination.commit(MusicLibrary());
-      final before = await destination.store.file.readAsString();
+      final before = (await destination.database.load())!.toJson();
       var checks = 0;
       await expectLater(
         destination.importArchive(
@@ -346,9 +352,15 @@ void main() {
         throwsStateError,
       );
       expect(await destination.directory.list().length, 1);
-      destination.store.protect();
-      await expectLater(destination.importArchive(zip.path), throwsStateError);
-      expect(await destination.store.file.readAsString(), before);
+      await destination.database.customStatement(
+        "CREATE TRIGGER reject_track BEFORE INSERT ON library_tracks "
+        "BEGIN SELECT RAISE(ABORT, 'test save failure'); END",
+      );
+      await expectLater(
+        destination.importArchive(zip.path),
+        throwsA(isException),
+      );
+      expect((await destination.database.load())!.toJson(), before);
       expect(await destination.directory.list().length, 1);
     },
   );

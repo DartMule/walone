@@ -21,6 +21,8 @@ class MusicImportDialog extends StatefulWidget {
 
 class _MusicImportDialogState extends State<MusicImportDialog> {
   final _link = TextEditingController();
+  final _limit = TextEditingController(text: '500');
+  String? _limitError;
   ImportProvider _provider = ImportProvider.youtube;
   Map<String, bool> _tools = {};
   bool _checking = true;
@@ -30,6 +32,8 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
   @override
   void initState() {
     super.initState();
+    _limit.text =
+        '${context.read<ImportCubit>().music.repository.library.importLimit}';
     unawaited(_checkTools());
   }
 
@@ -65,6 +69,7 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
   @override
   void dispose() {
     _link.dispose();
+    _limit.dispose();
     super.dispose();
   }
 
@@ -122,6 +127,11 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                           Icons.cloud_outlined,
                         ),
                         (ImportProvider.vk, 'VK', Icons.music_note_outlined),
+                        (
+                          ImportProvider.spotify,
+                          'Spotify',
+                          Icons.library_music_outlined,
+                        ),
                       ])
                         ChoiceChip(
                           avatar: Icon(icon, size: 18),
@@ -146,9 +156,10 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                   ),
                   const SizedBox(height: 16),
                   Text(switch (_provider) {
-                    ImportProvider.youtube => 'Видео сохранится новым плейлистом. Главы и таймкоды станут отдельными треками.',
+                    ImportProvider.youtube => 'Плейлист сохранится отдельным списком. В одиночном видео главы и таймкоды станут треками.',
                     ImportProvider.soundcloud => 'Трек добавится в открытый плейлист, а альбом или плейлист сохранится отдельным списком.',
-                    ImportProvider.vk => 'Для импорта войдите в VK. Вход сохранится в отдельном окне приложения.',
+                    ImportProvider.spotify => 'Названия и исполнители из Spotify будут найдены на YouTube. Совпадения проверяются по названию и длительности; некоторые записи могут быть пропущены.',
+                    ImportProvider.vk => 'Для импорта войдите в VK. Можно вставить ссылку на трек, плейлист или раздел «Моя музыка»: https://vk.com/music.',
                   }),
                   if (_provider == ImportProvider.vk)
                     Wrap(
@@ -165,6 +176,19 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                         ),
                       ],
                     ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _limit,
+                    enabled: !state.busy,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() => _limitError = null),
+                    decoration: InputDecoration(
+                      labelText: 'Максимум треков',
+                      helperText:
+                          'Первые N треков из списка. 0 — импортировать всё.',
+                      errorText: _limitError,
+                    ),
+                  ),
                   const SizedBox(height: 20),
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -291,7 +315,26 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                       _link.text.trim().isEmpty ||
                       _linkError != null
                   ? null
-                  : () => cubit.remote(_provider, _link.text),
+                  : () {
+                      final limit = int.tryParse(_limit.text.trim());
+                      if (limit == null || limit < 0 || limit > 100000) {
+                        setState(
+                          () => _limitError = 'Введите число от 0 до 100000',
+                        );
+                        return;
+                      }
+                      cubit.remote(
+                        _provider,
+                        _link.text,
+                        limit: limit,
+                        chooseArtist: (name, matches) => showDialog<String>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) =>
+                              ArtistMatchDialog(name: name, matches: matches),
+                        ),
+                      );
+                    },
               icon: const Icon(Icons.playlist_add),
               label: const Text('Импортировать'),
             ),
@@ -534,5 +577,171 @@ class _MusicSplitDialogState extends State<MusicSplitDialog> {
         );
       },
     ),
+  );
+}
+
+class ArtistMatchDialog extends StatelessWidget {
+  const ArtistMatchDialog({
+    super.key,
+    required this.name,
+    required this.matches,
+  });
+  final String name;
+  final List<String> matches;
+  @override
+  Widget build(BuildContext context) => WaloneDialog(
+    title: const Text('Совпадение исполнителя'),
+    content: SizedBox(
+      width: 420,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '«$name» отличается от сохранённого имени только регистром. Выбор применяется ко всем трекам с таким именем в этом импорте.',
+            ),
+            for (final match in matches)
+              ListTile(
+                title: Text(match),
+                subtitle: const Text('Привязать к сохранённому исполнителю'),
+                onTap: () => Navigator.pop(context, match),
+              ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Отменить импорт'),
+      ),
+      OutlinedButton(
+        onPressed: () => Navigator.pop(context, name),
+        child: Text('Создать «$name»'),
+      ),
+    ],
+  );
+}
+
+class TrackEditDialog extends StatefulWidget {
+  const TrackEditDialog({super.key, required this.artists, this.track});
+  final List<String> artists;
+  final MusicTrack? track;
+  @override
+  State<TrackEditDialog> createState() => _TrackEditDialogState();
+}
+
+class _TrackEditDialogState extends State<TrackEditDialog> {
+  late final _title = TextEditingController(text: widget.track?.title ?? '');
+  final _artist = TextEditingController();
+  late final _artists = [...?widget.track?.artists];
+
+  void _addArtist(String name) {
+    final clean = name.trim();
+    if (clean.isEmpty) return;
+    setState(() {
+      if (!_artists.contains(clean)) _artists.add(clean);
+      _artist.clear();
+    });
+  }
+
+  String? _error;
+  @override
+  void dispose() {
+    _title.dispose();
+    _artist.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => WaloneDialog(
+    title: Text(
+      widget.track == null ? 'Назначить исполнителей' : 'Изменить трек',
+    ),
+    content: SizedBox(
+      width: 420,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.track != null) ...[
+              TextField(
+                controller: _title,
+                decoration: InputDecoration(
+                  labelText: 'Название трека',
+                  errorText: _error,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (_artists.isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final name in _artists)
+                      InputChip(
+                        label: Text(name),
+                        deleteButtonTooltipMessage: 'Убрать исполнителя $name',
+                        onDeleted: () => setState(() => _artists.remove(name)),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: _artist,
+              onSubmitted: _addArtist,
+              decoration: InputDecoration(
+                labelText: 'Добавить исполнителя',
+                helperText:
+                    'Одно имя за раз. Enter или кнопка + добавляет в список.',
+                helperMaxLines: 2,
+                suffixIcon: IconButton(
+                  tooltip: 'Добавить исполнителя',
+                  onPressed: () => _addArtist(_artist.text),
+                  icon: const Icon(Icons.add),
+                ),
+              ),
+            ),
+            if (widget.artists.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              DesktopSelect<String>(
+                value: null,
+                hint: 'Сохранённые исполнители',
+                items: {for (final a in widget.artists) a: a},
+                onChanged: _addArtist,
+              ),
+            ],
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Отмена'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (widget.track != null &&
+              (_title.text.trim().isEmpty || _title.text.trim().length > 80)) {
+            setState(
+              () => _error = 'Название должно содержать от 1 до 80 символов',
+            );
+            return;
+          }
+          Navigator.pop(context, (
+            title: _title.text.trim(),
+            artists: cleanArtistNames([..._artists, _artist.text]),
+          ));
+        },
+        child: const Text('Сохранить'),
+      ),
+    ],
   );
 }

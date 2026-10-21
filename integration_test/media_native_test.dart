@@ -175,8 +175,12 @@ void main() {
         await music.pause();
         expect(music.visualization.value, isNull);
         final restored = MusicRepository(repository.directory);
-        await restored.initialize();
-        expect(restored.library.position, closeTo(2, 0.5));
+        try {
+          await restored.initialize();
+          expect(restored.library.position, closeTo(2, 0.5));
+        } finally {
+          await restored.close();
+        }
         await atmosphere.setLayer('rain', enabled: true);
         await atmosphere.setLayer('ocean', enabled: true);
         await atmosphere.toggleBackground();

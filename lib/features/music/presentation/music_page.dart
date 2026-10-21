@@ -1,6 +1,7 @@
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/widgets.dart';
@@ -21,6 +22,95 @@ class MusicPageState extends State<MusicPage> {
   final _scroll = ScrollController();
   final _currentTrack = GlobalKey();
   int _revealRequest = 0;
+  int _searchRevision = 0;
+  final _selected = <String>{};
+  String _query = '';
+  bool _selecting = false;
+  String? _selectionView;
+  int? _anchor;
+
+  void _toggle(List<MusicTrack> tracks, int index, bool value) => setState(() {
+    if (HardwareKeyboard.instance.isShiftPressed &&
+        _anchor != null &&
+        _anchor! < tracks.length) {
+      final start = index < _anchor! ? index : _anchor!;
+      final end = index > _anchor! ? index : _anchor!;
+      for (var i = start; i <= end; i++) {
+        if (value) {
+          _selected.add(tracks[i].id);
+        } else {
+          _selected.remove(tracks[i].id);
+        }
+      }
+    } else if (value) {
+      _selected.add(tracks[index].id);
+    } else {
+      _selected.remove(tracks[index].id);
+    }
+    _anchor = index;
+  });
+
+  Future<void> _batch(String action, MusicLibrary library) async {
+    final cubit = context.read<MusicCubit>();
+    final ids = Set<String>.of(_selected);
+    if (ids.isEmpty) return;
+    if (action == 'artist') {
+      final result = await showDialog<({String title, List<String> artists})>(
+        context: context,
+        builder: (_) => TrackEditDialog(artists: library.artists),
+      );
+      if (result != null) await cubit.editTracks(ids, artists: result.artists);
+    } else if (action == 'add') {
+      final destination = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => WaloneDialog(
+          title: const Text('Добавить в плейлист'),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final p in library.playlists)
+                    ListTile(
+                      title: Text(p.name),
+                      onTap: () => Navigator.pop(dialogContext, p.id),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Отмена'),
+            ),
+          ],
+        ),
+      );
+      if (destination != null) await cubit.addToPlaylist(ids, destination);
+    } else {
+      final delete = action == 'delete';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (_) => ConfirmDialog(
+          title: delete
+              ? 'Удалить выбранные треки из медиатеки?'
+              : 'Убрать выбранные треки из плейлиста?',
+          message: delete
+              ? 'Локальные копии будут удалены из всех плейлистов. Исходные файлы останутся.'
+              : 'Треки останутся в разделе «Все треки».',
+        ),
+      );
+      if (confirmed == true) {
+        await cubit.removeTracks(
+          ids,
+          playlistID: delete ? null : library.selectedID,
+        );
+      }
+    }
+    if (mounted) setState(() => _selected.clear());
+  }
 
   Future<void> revealCurrentTrack() async {
     final request = ++_revealRequest;
@@ -29,6 +119,12 @@ class MusicPageState extends State<MusicPage> {
     if (library.trackID == null || library.playingID == null) return;
     if (library.selectedID != library.playingID) {
       await cubit.select(library.playingID!);
+    }
+    if (mounted) {
+      setState(() {
+        _query = '';
+        _searchRevision++;
+      });
     }
     var reset = _currentTrack.currentContext == null;
     void reveal(Duration _) {
@@ -75,6 +171,13 @@ class MusicPageState extends State<MusicPage> {
     super.dispose();
   }
 
+  Future<String?> _chooseArtist(String name, List<String> matches) =>
+      showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => ArtistMatchDialog(name: name, matches: matches),
+      );
+
   Future<void> _name(BuildContext context, {MusicPlaylist? playlist}) async {
     final cubit = context.read<MusicCubit>();
     final name = await showDialog<String>(
@@ -97,12 +200,35 @@ class MusicPageState extends State<MusicPage> {
         final cubit = context.read<MusicCubit>();
         final importer = context.read<ImportCubit>();
         final library = state.library;
-        final playlist = library.playlist(library.selectedID);
-        final tracks = library.tracksIn(library.selectedID);
+        final playlist =
+            library.playlist(library.selectedID) ??
+            library.playlist(allMusicID)!;
+        final savedPlaylist = library.isSavedPlaylist(playlist.id);
+        if (_selectionView != playlist.id) {
+          _query = '';
+          _searchRevision++;
+          _selected.clear();
+          _anchor = null;
+          _selectionView = playlist.id;
+        }
+        _selected.retainAll(library.tracks.map((t) => t.id));
+        final query = _query.toLowerCase();
+        final tracks = library
+            .tracksIn(playlist.id)
+            .where(
+              (t) => '${t.title} ${t.artist}'.toLowerCase().contains(query),
+            )
+            .toList();
+        final reorderable = savedPlaylist && _query.isEmpty && !_selecting;
+        final artistView = library.artists
+            .where((a) => artistMusicID(a) == playlist.id)
+            .firstOrNull;
         return DropTarget(
-          enable: playlist != null && !state.importing,
-          onDragDone: (details) =>
-              importer.files(details.files.map((f) => f.path).toList()),
+          enable: !state.importing,
+          onDragDone: (details) => importer.files(
+            details.files.map((f) => f.path).toList(),
+            chooseArtist: _chooseArtist,
+          ),
           child: CustomScrollView(
             controller: _scroll,
             slivers: [
@@ -128,18 +254,80 @@ class MusicPageState extends State<MusicPage> {
                         runSpacing: 8,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          if (library.playlists.isNotEmpty)
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 300),
-                              child: DesktopSelect<String>(
-                                value: library.selectedID,
-                                hint: 'Выберите плейлист',
-                                items: {
-                                  for (final p in library.playlists)
-                                    p.id: p.name,
-                                },
-                                onChanged: cubit.select,
-                              ),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 300),
+                            child: DesktopSelect<String>(
+                              value: playlist.id,
+                              hint: 'Выберите плейлист',
+                              items: {
+                                allMusicID: 'Все треки',
+                                playlist.id: ?artistView,
+                                for (final p in library.playlists) p.id: p.name,
+                              },
+                              onChanged: cubit.select,
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              final artist = await showDialog<String>(
+                                context: context,
+                                builder: (dialogContext) => WaloneDialog(
+                                  title: const Text('Исполнители'),
+                                  content: SizedBox(
+                                    width: 420,
+                                    child: SingleChildScrollView(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (library.artists.isEmpty)
+                                            const Text(
+                                              'Исполнители появятся после импорта или редактирования треков.',
+                                            ),
+                                          for (final a
+                                              in (library.artists.toList()
+                                                ..sort(
+                                                  (a, b) =>
+                                                      a.toLowerCase().compareTo(
+                                                        b.toLowerCase(),
+                                                      ),
+                                                )))
+                                            ListTile(
+                                              title: Text(a),
+                                              subtitle: Text(
+                                                '${library.tracks.where((t) => t.artists.contains(a)).length} треков',
+                                              ),
+                                              onTap: () => Navigator.pop(
+                                                dialogContext,
+                                                a,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(dialogContext),
+                                      child: const Text('Закрыть'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (artist != null) {
+                                await cubit.select(artistMusicID(artist));
+                              }
+                            },
+                            icon: const Icon(Icons.person_outline),
+                            label: const Text('Исполнители'),
+                          ),
+                          if (artistView != null)
+                            OutlinedButton.icon(
+                              onPressed: state.importing
+                                  ? null
+                                  : () => cubit.artistPlaylist(artistView),
+                              icon: const Icon(Icons.playlist_add),
+                              label: const Text('Плейлист исполнителя'),
                             ),
                           OutlinedButton.icon(
                             onPressed: state.importing
@@ -148,7 +336,7 @@ class MusicPageState extends State<MusicPage> {
                             icon: const Icon(Icons.playlist_add),
                             label: const Text('Новый плейлист'),
                           ),
-                          if (playlist != null)
+                          if (savedPlaylist)
                             PopupMenuButton<String>(
                               tooltip: 'Действия с плейлистом',
                               icon: const Icon(
@@ -178,7 +366,7 @@ class MusicPageState extends State<MusicPage> {
                                     context: context,
                                     builder: (_) => ConfirmDialog(
                                       title: 'Удалить «${playlist.name}»?',
-                                      message: 'Копии треков, не используемые другими плейлистами, будут удалены. Оригиналы останутся.',
+                                      message: 'Треки останутся в разделе «Все треки».',
                                     ),
                                   );
                                   if (confirmed == true) {
@@ -195,7 +383,7 @@ class MusicPageState extends State<MusicPage> {
                         runSpacing: 8,
                         children: [
                           FilledButton.tonalIcon(
-                            onPressed: playlist == null || state.importing
+                            onPressed: state.importing
                                 ? null
                                 : () async {
                                     final files = await openFiles(
@@ -222,6 +410,7 @@ class MusicPageState extends State<MusicPage> {
                                     if (files.isNotEmpty) {
                                       await importer.files(
                                         files.map((f) => f.path).toList(),
+                                        chooseArtist: _chooseArtist,
                                       );
                                     }
                                   },
@@ -252,7 +441,10 @@ class MusicPageState extends State<MusicPage> {
                                       ],
                                     );
                                     if (file != null) {
-                                      await importer.importArchive(file.path);
+                                      await importer.importArchive(
+                                        file.path,
+                                        chooseArtist: _chooseArtist,
+                                      );
                                     }
                                   },
                             icon: const Icon(Icons.unarchive_outlined),
@@ -286,8 +478,81 @@ class MusicPageState extends State<MusicPage> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        '${tracks.length} треков · Перетащите сюда аудиофайлы',
+                      Text('${playlist.name} · ${tracks.length} треков'),
+                      const SizedBox(height: 12),
+                      TextField(
+                        key: ValueKey('music-search-$_searchRevision'),
+                        decoration: const InputDecoration(
+                          labelText: 'Поиск по названию и исполнителю',
+                          prefixIcon: Icon(Icons.search),
+                        ),
+                        onChanged: (value) => setState(() {
+                          _query = value;
+                          _anchor = null;
+                        }),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          TextButton.icon(
+                            onPressed: state.importing
+                                ? null
+                                : () => setState(() {
+                                    _selecting = !_selecting;
+                                    _selected.clear();
+                                    _anchor = null;
+                                  }),
+                            icon: Icon(
+                              _selecting ? Icons.close : Icons.checklist,
+                            ),
+                            label: Text(
+                              _selecting
+                                  ? 'Закончить выделение'
+                                  : 'Выделить треки',
+                            ),
+                          ),
+                          if (_selecting) ...[
+                            TextButton(
+                              onPressed: () => setState(() {
+                                _selected.addAll(tracks.map((t) => t.id));
+                              }),
+                              child: const Text('Выделить все'),
+                            ),
+                            Text('Выбрано: ${_selected.length}'),
+                            PopupMenuButton<String>(
+                              tooltip: 'Действия с выбранными',
+                              enabled: _selected.isNotEmpty && !state.importing,
+                              onSelected: (action) => _batch(action, library),
+                              itemBuilder: (_) => [
+                                if (library.playlists.isNotEmpty)
+                                  const PopupMenuItem(
+                                    value: 'add',
+                                    child: Text('Добавить в плейлист'),
+                                  ),
+                                const PopupMenuItem(
+                                  value: 'artist',
+                                  child: Text('Назначить исполнителей'),
+                                ),
+                                if (savedPlaylist)
+                                  const PopupMenuItem(
+                                    value: 'remove',
+                                    child: Text('Убрать из плейлиста'),
+                                  ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Удалить из медиатеки'),
+                                ),
+                              ],
+                              child: const Padding(
+                                padding: EdgeInsets.all(8),
+                                child: Text('Действия с выбранными'),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       if (state.error != null)
                         SelectableText(
@@ -325,7 +590,7 @@ class MusicPageState extends State<MusicPage> {
                   child: Padding(
                     padding: EdgeInsets.all(32),
                     child: Text(
-                      'Пока нет треков. Создайте плейлист и добавьте музыку.',
+                      'Нет треков. Добавьте музыку или измените поисковый запрос.',
                     ),
                   ),
                 )
@@ -334,11 +599,15 @@ class MusicPageState extends State<MusicPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverReorderableList(
                     itemCount: tracks.length,
-                    onReorderItem: (from, to) => cubit.reorder(
-                      playlist!.id,
-                      from,
-                      to > from ? to + 1 : to,
-                    ),
+                    onReorderItem: (from, to) {
+                      if (reorderable) {
+                        cubit.reorder(
+                          playlist.id,
+                          from,
+                          to > from ? to + 1 : to,
+                        );
+                      }
+                    },
                     itemBuilder: (context, index) => Padding(
                       key: ValueKey(tracks[index].id),
                       padding: const EdgeInsets.only(bottom: 8),
@@ -349,7 +618,11 @@ class MusicPageState extends State<MusicPage> {
                             ? _currentTrack
                             : null,
                         track: tracks[index],
-                        playlist: playlist!,
+                        playlist: playlist,
+                        reorderable: reorderable,
+                        selecting: _selecting,
+                        selected: _selected.contains(tracks[index].id),
+                        onSelect: (value) => _toggle(tracks, index, value),
                         index: index,
                         state: state,
                       ),
@@ -376,7 +649,13 @@ class MusicTrackTile extends StatelessWidget {
     required this.playlist,
     required this.index,
     required this.state,
+    this.reorderable = true,
+    this.selecting = false,
+    this.selected = false,
+    this.onSelect,
   });
+  final bool reorderable, selecting, selected;
+  final ValueChanged<bool>? onSelect;
   final MusicTrack track;
   final MusicPlaylist playlist;
   final int index;
@@ -389,60 +668,116 @@ class MusicTrackTile extends StatelessWidget {
         state.library.playingID == playlist.id;
     return GlassPanel(
       radius: WaloneDesign.cardRadius,
-      selected: current,
+      selected: current || selected,
       child: ListTile(
-        leading: IconButton(
-          tooltip: 'Воспроизвести ${track.title}',
-          icon: Icon(current && state.playing ? Icons.pause : Icons.play_arrow),
-          onPressed: () => current && state.playing
-              ? cubit.pause()
-              : cubit.play(trackID: track.id, playlistID: playlist.id),
-        ),
+        onTap: selecting ? () => onSelect?.call(!selected) : null,
+        leading: selecting
+            ? Checkbox(
+                value: selected,
+                onChanged: state.importing
+                    ? null
+                    : (v) => onSelect?.call(v ?? false),
+              )
+            : IconButton(
+                tooltip: 'Воспроизвести ${track.title}',
+                icon: Icon(
+                  current && state.playing ? Icons.pause : Icons.play_arrow,
+                ),
+                onPressed: () => current && state.playing
+                    ? cubit.pause()
+                    : cubit.play(trackID: track.id, playlistID: playlist.id),
+              ),
         title: Text(track.title),
-        subtitle: Text(timeLabel(track.duration)),
+        subtitle: track.artists.isEmpty
+            ? const Text('Исполнитель не указан')
+            : Wrap(
+                spacing: 4,
+                children: [
+                  for (var i = 0; i < track.artists.length; i++)
+                    InkWell(
+                      onTap: () =>
+                          cubit.select(artistMusicID(track.artists[i])),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          '${track.artists[i]}${i + 1 < track.artists.length ? ',' : ''}',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ReorderableDragStartListener(
-              index: index,
-              enabled: !state.importing,
-              child: const Padding(
-                padding: EdgeInsets.all(8),
-                child: Icon(Icons.drag_handle),
+            Text(timeLabel(track.duration)),
+            if (reorderable)
+              ReorderableDragStartListener(
+                index: index,
+                enabled: !state.importing,
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(Icons.drag_handle),
+                ),
               ),
-            ),
             PopupMenuButton<String>(
               tooltip: 'Действия с треком',
               icon: const Icon(Icons.more_horiz_rounded, size: 20),
               enabled: !state.importing,
               itemBuilder: (_) => [
-                if (index > 0)
+                if (reorderable && index > 0)
                   DesktopMenuItem(
                     value: 'up',
                     label: 'Переместить выше',
                     icon: Icons.arrow_upward_rounded,
                   ),
-                if (index + 1 < playlist.trackIDs.length)
+                if (reorderable && index + 1 < playlist.trackIDs.length)
                   DesktopMenuItem(
                     value: 'down',
                     label: 'Переместить ниже',
                     icon: Icons.arrow_downward_rounded,
                   ),
-                DesktopMenuItem(
-                  value: 'split',
-                  label: 'Разделить на треки…',
-                  icon: Icons.content_cut_rounded,
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Text('Изменить название и исполнителя…'),
                 ),
+                if (state.library.isSavedPlaylist(playlist.id))
+                  DesktopMenuItem(
+                    value: 'split',
+                    label: 'Разделить на треки…',
+                    icon: Icons.content_cut_rounded,
+                  ),
                 const PopupMenuDivider(height: 9),
-                DesktopMenuItem(
-                  value: 'remove',
-                  label: 'Убрать из плейлиста',
-                  icon: Icons.delete_outline_rounded,
-                  destructive: true,
-                ),
+                if (state.library.isSavedPlaylist(playlist.id))
+                  DesktopMenuItem(
+                    value: 'remove',
+                    label: 'Убрать из плейлиста',
+                    icon: Icons.delete_outline_rounded,
+                    destructive: true,
+                  ),
               ],
               onSelected: (action) async {
                 switch (action) {
+                  case 'edit':
+                    final result =
+                        await showDialog<
+                          ({String title, List<String> artists})
+                        >(
+                          context: context,
+                          builder: (_) => TrackEditDialog(
+                            artists: state.library.artists,
+                            track: track,
+                          ),
+                        );
+                    if (result != null) {
+                      await cubit.editTracks(
+                        {track.id},
+                        title: result.title,
+                        artists: result.artists,
+                      );
+                    }
                   case 'up':
                     await cubit.reorder(playlist.id, index, index - 1);
                   case 'down':
@@ -452,7 +787,7 @@ class MusicTrackTile extends StatelessWidget {
                       context: context,
                       builder: (_) => const ConfirmDialog(
                         title: 'Убрать трек?',
-                        message: 'Если трек не используется в других плейлистах, локальная копия будет удалена. Оригинал останется.',
+                        message: 'Трек останется в разделе «Все треки».',
                       ),
                     );
                     if (confirmed == true) {

@@ -69,7 +69,7 @@ void main() {
   }
 
   test(
-    'Копии и SHA-256: удаляется только последний неиспользуемый файл',
+    'Копии и SHA-256: удаление плейлиста сохраняет трек в медиатеке',
     () async {
       final track = await add('first', '10');
       final first = repository.library.selectedID!;
@@ -83,6 +83,8 @@ void main() {
       await music.removeTrack(track.id, first);
       expect(await File(repository.pathFor(track)).exists(), isTrue);
       await music.deletePlaylist(second);
+      expect(await File(repository.pathFor(track)).exists(), isTrue);
+      await music.removeTracks({track.id});
       expect(await File(repository.pathFor(track)).exists(), isFalse);
       expect(await File(p.join(root.path, 'first.wav')).readAsString(), '10');
     },
@@ -91,14 +93,12 @@ void main() {
   test(
     'Повреждённый манифест и небезопасный путь не перезаписываются',
     () async {
-      await repository.directory.create(recursive: true);
-      final manifest = await File(
-        p.join(repository.directory.path, 'library.json'),
-      ).writeAsString('{broken');
-      final protected = MusicRepository(
-        repository.directory,
-        audioFactory: FakeAudio.new,
-      );
+      final corrupted = Directory(p.join(root.path, 'corrupted'));
+      await corrupted.create();
+      final manifest = await File(p.join(corrupted.path, 'library.json'))
+          .writeAsString('{broken');
+      final protected = MusicRepository(corrupted, audioFactory: FakeAudio.new);
+      addTearDown(protected.close);
       await expectLater(protected.initialize(), throwsStateError);
       await expectLater(protected.commit(MusicLibrary()), throwsStateError);
       expect(await manifest.readAsString(), '{broken');
@@ -136,6 +136,7 @@ void main() {
         repository.directory,
         audioFactory: FakeAudio.new,
       );
+      addTearDown(restored.close);
       await restored.initialize();
       expect(restored.library.position, 4);
     },
@@ -484,7 +485,7 @@ void main() {
       );
       expect(importButton().onPressed, isNull);
       await tester.enterText(
-        find.byType(TextField),
+        find.byType(TextField).first,
         'https://soundcloud.com/artist/track',
       );
       await tester.pumpAndSettle();
@@ -496,7 +497,7 @@ void main() {
       );
       expect(importButton().onPressed, isNotNull);
       await tester.enterText(
-        find.byType(TextField),
+        find.byType(TextField).first,
         'https://example.com/song',
       );
       await tester.pumpAndSettle();
@@ -506,7 +507,7 @@ void main() {
       );
       expect(importButton().onPressed, isNull);
       await tester.enterText(
-        find.byType(TextField),
+        find.byType(TextField).first,
         'https://youtu.be/abcdefghijk',
       );
       await tester.pumpAndSettle();
@@ -522,7 +523,10 @@ void main() {
       await tester.tap(find.text('Проверить снова'));
       await tester.pumpAndSettle();
       expect(importButton().onPressed, isNotNull);
-      await tester.enterText(find.byType(TextField), 'https://vk.ru/audio1_2');
+      await tester.enterText(
+        find.byType(TextField).first,
+        'https://vk.ru/audio1_2',
+      );
       await tester.pumpAndSettle();
       expect(find.text('Войти в VK'), findsOneWidget);
       expect(find.text('JavaScript runtime · Deno / Node.js'), findsNothing);
@@ -533,7 +537,7 @@ void main() {
       }
       if (const bool.fromEnvironment('CAPTURE_IMPORT_DIALOG')) {
         await tester.enterText(
-          find.byType(TextField),
+          find.byType(TextField).first,
           'https://youtu.be/abcdefghijk',
         );
         await tester.pumpAndSettle();

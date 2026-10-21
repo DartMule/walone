@@ -186,8 +186,9 @@ class FakeVkSession extends VkSession {
   @override
   Future<Map<String, dynamic>> catalog(
     MusicLink link,
-    MusicProcess worker,
-  ) async => {
+    MusicProcess worker, {
+    int limit = 500,
+  }) async => {
     'name': 'VK test',
     'tracks': [
       {

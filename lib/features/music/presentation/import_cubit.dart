@@ -40,7 +40,7 @@ class ImportCubit extends Cubit<ImportState> {
 
   Future<Map<String, bool>> checkTools() async {
     final found = <String, bool>{};
-    for (final name in ['ffmpeg', 'yt-dlp', 'deno', 'node']) {
+    for (final name in ['ffmpeg', 'yt-dlp', 'deno', 'node', 'spotdl']) {
       try {
         await toolFinder(name);
         found[name] = true;
@@ -51,6 +51,7 @@ class ImportCubit extends Cubit<ImportState> {
     return {
       'ffmpeg': found['ffmpeg']!,
       'yt-dlp': found['yt-dlp']!,
+      'spotdl': found['spotdl']!,
       'javascript': found['deno']! || found['node']!,
     };
   }
@@ -133,7 +134,13 @@ class ImportCubit extends Cubit<ImportState> {
     _task = null;
   }
 
-  Future<void> files(List<String> paths) {
+  Future<void> files(
+    List<String> paths, {
+    Future<String?> Function(String, List<String>)? chooseArtist,
+  }) {
+    if (state.busy) return Future.value();
+    _chooseArtist = chooseArtist;
+    _artistChoices.clear();
     final destination = music.repository.library.selectedID;
     return _run((worker, directory) async {
       if (destination == null) throw StateError('Сначала создайте плейлист');
@@ -144,10 +151,19 @@ class ImportCubit extends Cubit<ImportState> {
         _status('Файл ${i + 1} из ${paths.length}');
         MusicTrack? track;
         try {
-          track = await music.repository.prepareFile(paths[i]);
+          final details = trackDetails({
+            'title': p.basenameWithoutExtension(paths[i]),
+          });
+          track = await music.repository.prepareFile(
+            paths[i],
+            title: details.title,
+            artists: await _artists(details.artists),
+          );
           worker.check();
           await music.accept([track], playlistID: destination);
           added++;
+        } on ImportCancelled {
+          rethrow;
         } catch (error) {
           if (track != null) await music.repository.discard([track]);
           worker.check();
@@ -164,11 +180,23 @@ class ImportCubit extends Cubit<ImportState> {
     return 'Медиатека экспортирована: $path';
   });
 
-  Future<void> importArchive(String path) => _run((worker, _) async {
-    _status('Проверка и импорт архива…');
-    await music.importArchive(path, check: worker.check);
-    return 'Медиатека импортирована. Плейлисты добавлены.';
-  });
+  Future<void> importArchive(
+    String path, {
+    Future<String?> Function(String, List<String>)? chooseArtist,
+  }) {
+    if (state.busy) return Future.value();
+    _chooseArtist = chooseArtist;
+    _artistChoices.clear();
+    return _run((worker, _) async {
+      _status('Проверка и импорт архива…');
+      await music.importArchive(
+        path,
+        check: worker.check,
+        resolveArtist: _artist,
+      );
+      return 'Медиатека импортирована. Плейлисты добавлены.';
+    });
+  }
 
   Future<List<String>> _arguments(ImportProvider provider) async {
     final args = [
@@ -201,7 +229,9 @@ class ImportCubit extends Cubit<ImportState> {
         /* Другой runtime может быть установлен. */
       }
     }
-    if (provider == ImportProvider.youtube && !runtimeFound) {
+    if ((provider == ImportProvider.youtube ||
+            provider == ImportProvider.spotify) &&
+        !runtimeFound) {
       throw StateError(
         'Для YouTube нужен JavaScript runtime. Скачайте Deno в окне импорта.',
       );
@@ -216,6 +246,7 @@ class ImportCubit extends Cubit<ImportState> {
     String tool,
     List<String> args, {
     bool flat = false,
+    int limit = 500,
   }) async {
     final text = await worker.run(
       tool,
@@ -228,8 +259,7 @@ class ImportCubit extends Cubit<ImportState> {
         '0',
         if (flat) ...[
           '--flat-playlist',
-          '--playlist-end',
-          '501',
+          if (limit > 0) ...['--playlist-end', '$limit'],
         ] else
           '--no-playlist',
         '--dump-single-json',
@@ -387,12 +417,14 @@ class ImportCubit extends Cubit<ImportState> {
   Future<MusicTrack> _prepared(
     String path,
     AudioSection section,
-    String sourceID,
-  ) async {
+    String sourceID, {
+    List<String> artists = const [],
+  }) async {
     final track = await music.repository.prepareFile(
       path,
       title: section.title,
       sourceID: sourceID,
+      artists: await _artists(artists),
     );
     if ((track.duration - (section.end - section.start)).abs() >
         max(0.5, (section.end - section.start) * 0.02)) {
@@ -426,6 +458,7 @@ class ImportCubit extends Cubit<ImportState> {
             output,
             sections[i],
             'split:${track.id}:${sections[i].start}:${sections[i].end}',
+            artists: track.artists,
           ),
         );
       }
@@ -437,14 +470,57 @@ class ImportCubit extends Cubit<ImportState> {
     }
   });
 
-  Future<void> remote(ImportProvider provider, String text) {
+  Future<String?> Function(String, List<String>)? _chooseArtist;
+  final _artistChoices = <String, String>{};
+  Future<List<String>> _artists(List<String> names) async =>
+      cleanArtistNames([for (final name in names) await _artist(name)]);
+
+  Future<String> _artist(String name) async {
+    final clean = name.trim();
+    if (clean.isEmpty) return '';
+    if (_artistChoices.containsKey(clean)) return _artistChoices[clean]!;
+    final saved = {
+      ...music.repository.library.artists,
+      ..._artistChoices.values,
+    };
+    if (saved.contains(clean)) return _artistChoices[clean] = clean;
+    final matches = saved
+        .where((a) => a.toLowerCase() == clean.toLowerCase())
+        .toList();
+    if (matches.isEmpty) return _artistChoices[clean] = clean;
+    if (_chooseArtist == null) {
+      throw StateError('Выберите исполнителя для «$clean» в окне импорта');
+    }
+    final choice = await _chooseArtist!(clean, matches);
+    _worker?.check();
+    if (choice == null) throw ImportCancelled();
+    if (choice != clean && !matches.contains(choice)) {
+      throw StateError('Неизвестный исполнитель');
+    }
+    return _artistChoices[clean] = choice;
+  }
+
+  Future<void> remote(
+    ImportProvider provider,
+    String text, {
+    int limit = 500,
+    Future<String?> Function(String, List<String>)? chooseArtist,
+  }) {
+    if (state.busy) return Future.value();
+    if (limit < 0 || limit > 100000) {
+      emit(const ImportState(error: 'Лимит должен быть от 0 до 100000'));
+      return Future.value();
+    }
+    _chooseArtist = chooseArtist;
+    _artistChoices.clear();
     final destination = music.repository.library.selectedID;
     return _run((worker, root) async {
+      await music.configure(importLimit: limit);
       if (provider == ImportProvider.vk) {
         try {
           final link = MusicLink.parse(provider, text);
           final ffmpeg = await toolFinder('ffmpeg');
-          return await _vk(link, destination, worker, root, ffmpeg);
+          return await _vk(link, destination, worker, root, ffmpeg, limit);
         } finally {
           vk.release();
         }
@@ -453,6 +529,18 @@ class ImportCubit extends Cubit<ImportState> {
       final ffmpeg = await toolFinder('ffmpeg');
       final tool = await toolFinder('yt-dlp');
       final args = await _arguments(provider);
+      if (provider == ImportProvider.spotify) {
+        return _spotify(
+          link,
+          destination,
+          worker,
+          root,
+          tool,
+          args,
+          ffmpeg,
+          limit,
+        );
+      }
       _status('Получаем список и разметку…');
       final metadata = await _metadata(
         link.url,
@@ -461,8 +549,9 @@ class ImportCubit extends Cubit<ImportState> {
         tool,
         args,
         flat: link.playlist,
+        limit: limit,
       );
-      if (provider == ImportProvider.youtube) {
+      if (provider == ImportProvider.youtube && !link.playlist) {
         if (metadata['id'] != link.id) {
           throw StateError('YouTube вернул другую запись');
         }
@@ -497,6 +586,7 @@ class ImportCubit extends Cubit<ImportState> {
             warning = 'Разметки нет. Запись можно разделить вручную.';
           }
         }
+        if (limit > 0) sections = sections.take(limit).toList();
         _status('Загружаем аудио YouTube…');
         final input = await _download(metadata, worker, root, tool, args);
         final prepared = <MusicTrack>[];
@@ -516,6 +606,7 @@ class ImportCubit extends Cubit<ImportState> {
                     await _render(input, section, root, worker, ffmpeg, i),
                     section,
                     sourceID,
+                    artists: metadataArtistNames(metadata),
                   ),
             );
           }
@@ -535,87 +626,256 @@ class ImportCubit extends Cubit<ImportState> {
       final entries = link.playlist
           ? metadata['entries'] as List<dynamic>?
           : [metadata];
-      if (entries == null || entries.isEmpty || entries.length > 500) {
-        throw StateError(
-          'Плейлист пуст, недоступен или содержит больше 500 треков',
-        );
+      if (entries == null || entries.isEmpty) {
+        throw StateError('Плейлист пуст или недоступен');
       }
-      String? playlistID = link.playlist ? null : destination;
-      final name = metadata['title'] as String? ?? 'SoundCloud';
-      var added = 0, skipped = 0;
-      Object? lastError;
-      for (var i = 0; i < entries.length; i++) {
-        worker.check();
-        _status('SoundCloud: ${i + 1} из ${entries.length}');
-        final row = entries[i];
-        if (row is! Map<String, dynamic> ||
-            !RegExp(r'^\d+$').hasMatch('${row['id']}')) {
-          skipped++;
-          continue;
-        }
-        final id = '${row['id']}';
-        final sourceID = 'soundcloud:$id';
-        MusicTrack? prepared;
-        final folder = await root.createTemp('track-');
-        try {
-          prepared = music.repository.library.tracks
-              .where((t) => t.sourceID == sourceID)
-              .firstOrNull;
-          if (prepared == null) {
-            final url = 'https://api.soundcloud.com/tracks/$id';
-            final track = link.playlist
-                ? await _metadata(url, worker, folder, tool, args)
-                : row;
-            if ('${track['id']}' != id) {
-              throw StateError('SoundCloud вернул другой трек');
-            }
-            final duration = _duration(track);
-            final title = track['title'] as String? ?? 'Трек SoundCloud';
-            final section = AudioSection(0, duration, title);
-            final input = await _download(
-              track,
-              worker,
-              folder,
-              tool,
-              args,
-              soundcloud: true,
-            );
-            prepared = await _prepared(
-              await _render(input, section, folder, worker, ffmpeg, 0),
-              section,
-              sourceID,
-            );
-          }
-        } catch (error) {
-          worker.check();
-          lastError = error;
-          skipped++;
-          continue;
-        } finally {
-          await folder.delete(recursive: true);
-        }
-        try {
-          worker.check();
-          await music.accept(
-            [prepared],
-            playlistID: playlistID,
-            newPlaylistName: name.trim().substring(
-              0,
-              min(80, name.trim().length),
-            ),
-          );
-          playlistID ??= music.repository.library.selectedID;
-          added++;
-        } finally {
-          await music.repository.discard([prepared]);
-        }
-      }
-      if (added == 0) {
-        throw lastError ??
-            StateError('SoundCloud не вернул доступные полные записи');
-      }
-      return 'SoundCloud: добавлено $added, пропущено $skipped.';
+      return _onlineEntries(
+        link,
+        limit == 0 ? entries : entries.take(limit).toList(),
+        metadata['title'] as String? ?? provider.name,
+        destination,
+        worker,
+        root,
+        tool,
+        args,
+        ffmpeg,
+      );
     });
+  }
+
+  Future<String> _onlineEntries(
+    MusicLink link,
+    List<dynamic> entries,
+    String name,
+    String? destination,
+    MusicProcess worker,
+    Directory root,
+    String tool,
+    List<String> args,
+    String ffmpeg,
+  ) async {
+    String? playlistID = link.playlist ? null : destination;
+    final label = link.provider == ImportProvider.youtube
+        ? 'YouTube'
+        : link.provider == ImportProvider.spotify
+        ? 'Spotify'
+        : 'SoundCloud';
+    var added = 0, skipped = 0;
+    Object? lastError;
+    for (var i = 0; i < entries.length; i++) {
+      worker.check();
+      _status('$label: ${i + 1} из ${entries.length}');
+      final row = entries[i];
+      final youtube = link.provider != ImportProvider.soundcloud;
+      if (row is! Map<String, dynamic> ||
+          !(youtube ? RegExp(r'^[A-Za-z0-9_-]{11}$') : RegExp(r'^\d+$'))
+              .hasMatch('${row['id']}')) {
+        skipped++;
+        continue;
+      }
+      final id = '${row['id']}';
+      final sourceID = row['spotifyID'] is String
+          ? 'spotify:${row['spotifyID']}'
+          : '${youtube ? 'youtube' : 'soundcloud'}:$id';
+      MusicTrack? prepared;
+      final folder = await root.createTemp('track-');
+      try {
+        prepared = music.repository.library.tracks
+            .where((t) => t.sourceID == sourceID)
+            .firstOrNull;
+        if (prepared == null) {
+          final url = youtube
+              ? 'https://www.youtube.com/watch?v=$id'
+              : 'https://api.soundcloud.com/tracks/$id';
+          final track = link.playlist || link.provider == ImportProvider.spotify
+              ? await _metadata(url, worker, folder, tool, args)
+              : row;
+          if ('${track['id']}' != id) {
+            throw StateError('$label вернул другой трек');
+          }
+          final duration = _duration(track);
+          if (row['spotifyDuration'] case final num expected) {
+            if ((expected - duration).abs() > max(8, expected * 0.05)) {
+              throw StateError('Длительность найденной записи не совпадает');
+            }
+          }
+          final details = trackDetails(track);
+          final section = AudioSection(
+            0,
+            duration,
+            row['spotifyTitle'] as String? ?? details.title,
+          );
+          final input = await _download(
+            track,
+            worker,
+            folder,
+            tool,
+            args,
+            soundcloud: !youtube,
+          );
+          prepared = await _prepared(
+            await _render(input, section, folder, worker, ffmpeg, 0),
+            section,
+            sourceID,
+            artists: row['spotifyArtists'] is List
+                ? (row['spotifyArtists'] as List).cast<String>()
+                : details.artists,
+          );
+        }
+      } on ImportCancelled {
+        rethrow;
+      } catch (error) {
+        worker.check();
+        lastError = error;
+        skipped++;
+        continue;
+      } finally {
+        await folder.delete(recursive: true);
+      }
+      try {
+        worker.check();
+        await music.accept(
+          [prepared],
+          playlistID: playlistID,
+          newPlaylistName: name.trim().isEmpty
+              ? label
+              : name.trim().substring(0, min(80, name.trim().length)),
+        );
+        playlistID ??= music.repository.library.selectedID;
+        added++;
+      } finally {
+        await music.repository.discard([prepared]);
+      }
+    }
+    if (added == 0) {
+      throw lastError ?? StateError('$label не вернул доступные полные записи');
+    }
+    return '$label: добавлено $added, пропущено $skipped.';
+  }
+
+  Future<String> _spotify(
+    MusicLink link,
+    String? destination,
+    MusicProcess worker,
+    Directory root,
+    String tool,
+    List<String> args,
+    String ffmpeg,
+    int limit,
+  ) async {
+    _status('Получаем названия и исполнителей Spotify…');
+    final file = File(p.join(root.path, 'tracks.spotdl'));
+    await worker.run(
+      await toolFinder('spotdl'),
+      [
+        'save',
+        link.url,
+        '--save-file',
+        file.path,
+        '--threads',
+        '1',
+        '--headless',
+        '--lyrics',
+        '--ffmpeg',
+        ffmpeg,
+      ],
+      root,
+      timeout: const Duration(minutes: 15),
+    );
+    if (await file.length() > 16 * 1024 * 1024) {
+      throw StateError('Список Spotify превышает 16 МиБ');
+    }
+    final data = jsonDecode(await file.readAsString());
+    if (data is! List || data.isEmpty) {
+      throw StateError('Spotify не вернул список треков');
+    }
+    final songs = limit == 0 ? data : data.take(limit).toList();
+    var added = 0, skipped = 0;
+    Object? lastError;
+    String? playlistID = link.playlist ? null : destination;
+    for (var i = 0; i < songs.length; i++) {
+      worker.check();
+      _status('Spotify: поиск ${i + 1} из ${songs.length} на YouTube…');
+      final song = songs[i];
+      if (song is! Map<String, dynamic> ||
+          song['name'] is! String ||
+          song['artist'] is! String ||
+          song['song_id'] is! String) {
+        skipped++;
+        continue;
+      }
+      final existing = music.repository.library.tracks
+          .where((t) => t.sourceID == 'spotify:${song['song_id']}')
+          .firstOrNull;
+      if (existing != null) {
+        await music.accept(
+          [existing],
+          playlistID: playlistID,
+          newPlaylistName: song['list_name'] as String? ?? 'Spotify',
+        );
+        playlistID ??= music.repository.library.selectedID;
+        added++;
+        continue;
+      }
+      try {
+        final search = await _metadata(
+          'ytsearch5:${metadataArtistNames(song).join(' ')} ${song['name']}',
+          worker,
+          root,
+          tool,
+          args,
+          flat: true,
+          limit: 5,
+        );
+        final candidates = (search['entries'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>();
+        final match = candidates
+            .where((row) => spotifyMatch(song, row))
+            .firstOrNull;
+        if (match == null) {
+          skipped++;
+          continue;
+        }
+        await _onlineEntries(
+          MusicLink(
+            provider: ImportProvider.spotify,
+            url: link.url,
+            id: link.id,
+          ),
+          [
+            {
+              ...match,
+              'spotifyID': song['song_id'],
+              'spotifyTitle': song['name'],
+              'spotifyArtists': metadataArtistNames(song),
+              'spotifyDuration': song['duration'],
+            },
+          ],
+          song['list_name'] as String? ?? 'Spotify',
+          playlistID,
+          worker,
+          root,
+          tool,
+          args,
+          ffmpeg,
+        );
+        playlistID ??= music.repository.library.selectedID;
+        added++;
+      } on ImportCancelled {
+        rethrow;
+      } catch (error) {
+        worker.check();
+        lastError = error;
+        skipped++;
+      }
+    }
+    if (added == 0) {
+      throw lastError ??
+          StateError(
+            'Подходящие записи YouTube не найдены. Проверьте доступ Spotify и YouTube.',
+          );
+    }
+    return 'Spotify: добавлено $added, не найдено или недоступно $skipped.';
   }
 
   Future<String> _vk(
@@ -624,11 +884,12 @@ class ImportCubit extends Cubit<ImportState> {
     MusicProcess worker,
     Directory root,
     String ffmpeg,
+    int limit,
   ) async {
     _status('Проверяем вход и получаем список VK…');
-    final catalog = await vk.catalog(link, worker);
-    final tracks = catalog['tracks'] as List<dynamic>;
-    if (tracks.length > 10000) throw StateError('Плейлист VK слишком большой');
+    final catalog = await vk.catalog(link, worker, limit: limit);
+    final rows = catalog['tracks'] as List<dynamic>;
+    final tracks = limit == 0 ? rows : rows.take(limit).toList();
     String? playlistID = link.playlist ? null : destination;
     var added = 0, skipped = 0;
     for (var i = 0; i < tracks.length; i++) {
@@ -659,10 +920,7 @@ class ImportCubit extends Cubit<ImportState> {
               uri.userInfo.isNotEmpty) {
             throw StateError('Аудио VK недоступно');
           }
-          final title = [
-            row['artist'] as String? ?? '',
-            row['title'] as String? ?? '',
-          ].where((s) => s.isNotEmpty).join(' — ');
+          final title = row['title'] as String? ?? '';
           final duration = (row['duration'] as num).toDouble();
           if (!duration.isFinite || duration <= 0 || duration > 86400) {
             throw StateError('Неизвестная длительность VK');
@@ -681,8 +939,15 @@ class ImportCubit extends Cubit<ImportState> {
             0,
             remote: true,
           );
-          prepared = await _prepared(output, section, sourceID);
+          prepared = await _prepared(
+            output,
+            section,
+            sourceID,
+            artists: metadataArtistNames(row),
+          );
         }
+      } on ImportCancelled {
+        rethrow;
       } catch (_) {
         worker.check();
         skipped++;

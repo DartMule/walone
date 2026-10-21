@@ -26,7 +26,7 @@ void main() {
     }
   });
 
-  for (final name in ['yt-dlp', 'javascript', 'ffmpeg']) {
+  for (final name in ['yt-dlp', 'javascript', 'ffmpeg', 'spotdl']) {
     test(
       'Загрузка и запуск $name во временной папке',
       () async {

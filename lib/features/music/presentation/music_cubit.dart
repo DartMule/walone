@@ -244,12 +244,10 @@ class MusicCubit extends Cubit<MusicState> {
     final library = repository.library;
     if (library.playingID == id) await _reset();
     final remaining = library.playlists.where((p) => p.id != id).toList();
-    await repository.removeUnused(
+    await repository.commit(
       library.copyWith(
         playlists: remaining,
-        selectedID: library.selectedID == id
-            ? remaining.firstOrNull?.id
-            : library.selectedID,
+        selectedID: library.selectedID == id ? allMusicID : library.selectedID,
         playingID: library.playingID == id ? null : library.playingID,
         trackID: library.playingID == id ? null : library.trackID,
         position: library.playingID == id ? 0 : library.position,
@@ -258,29 +256,116 @@ class MusicCubit extends Cubit<MusicState> {
     _remaining = [];
     _history = [];
   });
-  Future<void> removeTrack(String id, String playlistID) => _run(() async {
+  Future<void> removeTrack(String id, String playlistID) =>
+      removeTracks({id}, playlistID: playlistID);
+  Future<void> editTracks(
+    Set<String> ids, {
+    String? title,
+    String? artist,
+    List<String>? artists,
+  }) => _run(() async {
     if (_importing) return;
     final library = repository.library;
-    final stops = library.playingID == playlistID && library.trackID == id;
-    if (stops) await _reset();
-    await repository.removeUnused(
+    final playingArtist = library.artists.any(
+      (a) => artistMusicID(a) == library.playingID,
+    );
+    await repository.commit(
       library.copyWith(
-        playlists: library.playlists
-            .map(
-              (p) => p.id == playlistID
-                  ? p.copyWith(
-                      trackIDs: p.trackIDs.where((t) => t != id).toList(),
-                    )
-                  : p,
-            )
-            .toList(),
+        playingID: playingArtist && ids.contains(library.trackID)
+            ? allMusicID
+            : library.playingID,
+        tracks: [
+          for (final track in library.tracks)
+            ids.contains(track.id)
+                ? track.copyWith(
+                    title: title == null ? null : checkedName(title),
+                    artist: artist?.trim(),
+                    artists: artists,
+                  )
+                : track,
+        ],
+      ),
+    );
+    if (artist != null || artists != null) {
+      _remaining = [];
+      _history = [];
+    }
+  });
+
+  Future<void> addToPlaylist(Set<String> ids, String playlistID) =>
+      _run(() async {
+        if (_importing) return;
+        final library = repository.library;
+        if (!library.isSavedPlaylist(playlistID)) return;
+        final valid = library.tracks
+            .where((t) => ids.contains(t.id))
+            .map((t) => t.id);
+        await repository.commit(
+          library.copyWith(
+            playlists: [
+              for (final p in library.playlists)
+                p.id == playlistID
+                    ? p.copyWith(trackIDs: {...p.trackIDs, ...valid}.toList())
+                    : p,
+            ],
+          ),
+        );
+      });
+
+  Future<void> artistPlaylist(String artist) => _run(() async {
+    if (_importing) return;
+    final library = repository.library;
+    final playlist = MusicPlaylist(
+      id: const Uuid().v4(),
+      name: checkedName(artist),
+      trackIDs: library.tracks
+          .where((t) => t.artists.contains(artist))
+          .map((t) => t.id)
+          .toList(),
+    );
+    await repository.commit(
+      library.copyWith(
+        playlists: [...library.playlists, playlist],
+        selectedID: playlist.id,
+      ),
+    );
+  });
+
+  Future<void> removeTracks(
+    Set<String> ids, {
+    String? playlistID,
+  }) => _run(() async {
+    if (_importing) return;
+    final library = repository.library;
+    if (playlistID != null && !library.isSavedPlaylist(playlistID)) return;
+    final stops =
+        ids.contains(library.trackID) &&
+        (playlistID == null || playlistID == library.playingID);
+    if (stops) await _reset();
+    final removed = library.tracks.where((t) => ids.contains(t.id)).toList();
+    await repository.commit(
+      library.copyWith(
+        tracks: playlistID == null
+            ? library.tracks.where((t) => !ids.contains(t.id)).toList()
+            : null,
+        playlists: [
+          for (final p in library.playlists)
+            if (playlistID == null || p.id == playlistID)
+              p.copyWith(
+                trackIDs: p.trackIDs.where((id) => !ids.contains(id)).toList(),
+              )
+            else
+              p,
+        ],
         trackID: stops ? null : library.trackID,
         position: stops ? 0 : library.position,
       ),
     );
+    if (playlistID == null) await repository.discard(removed);
     _remaining = [];
     _history = [];
   });
+
   Future<void> reorder(String playlistID, int from, int to) => _run(() async {
     if (_importing) return;
     final library = repository.library;
@@ -314,8 +399,17 @@ class MusicCubit extends Cubit<MusicState> {
   Future<void> exportArchive(String path, {void Function()? check}) =>
       _transaction(() => repository.exportArchive(path, check: check));
 
-  Future<void> importArchive(String path, {void Function()? check}) =>
-      _transaction(() => repository.importArchive(path, check: check));
+  Future<void> importArchive(
+    String path, {
+    void Function()? check,
+    Future<String> Function(String)? resolveArtist,
+  }) => _transaction(
+    () => repository.importArchive(
+      path,
+      check: check,
+      resolveArtist: resolveArtist,
+    ),
+  );
 
   // Импорт готовых файлов фиксируется одной транзакцией, в том числе при нарезке.
   Future<void> accept(
@@ -326,6 +420,15 @@ class MusicCubit extends Cubit<MusicState> {
   }) => _transaction(() async {
     final library = repository.library;
     final id = playlistID ?? const Uuid().v4();
+    if (id == allMusicID ||
+        library.artists.any((a) => artistMusicID(a) == id)) {
+      final known = {for (final t in library.tracks) t.id: t};
+      for (final t in tracks) {
+        known.putIfAbsent(t.id, () => t);
+      }
+      await repository.commit(library.copyWith(tracks: known.values.toList()));
+      return;
+    }
     final existing = library.playlist(id);
     if (playlistID != null && existing == null) {
       throw StateError('Плейлист больше не существует');
@@ -358,7 +461,7 @@ class MusicCubit extends Cubit<MusicState> {
         library.playingID == id &&
         library.trackID == replacing;
     if (stops) await _reset();
-    await repository.removeUnused(
+    await repository.commit(
       library.copyWith(
         tracks: known.values.toList(),
         playlists: existing == null
@@ -375,6 +478,7 @@ class MusicCubit extends Cubit<MusicState> {
   });
 
   Future<void> configure({
+    int? importLimit,
     double? volume,
     bool? shuffle,
     MusicRepeat? repeatMode,
@@ -390,6 +494,7 @@ class MusicCubit extends Cubit<MusicState> {
       try {
         await repository.commit(
           repository.library.copyWith(
+            importLimit: importLimit,
             volume: nextVolume,
             shuffle: shuffle,
             repeatMode: repeatMode,
@@ -624,6 +729,7 @@ class MusicCubit extends Cubit<MusicState> {
       /* Повреждённая медиатека остаётся нетронутой. */
     }
     await _output?.dispose();
+    await repository.close();
     return super.close();
   }
 }

@@ -36,7 +36,7 @@ class DelayedMusic extends MusicRepository {
   DelayedMusic()
     : super(Directory('/unused/music'), audioFactory: FakeAudio.new) {
     library = MusicLibrary(
-      tracks: const [
+      tracks: [
         MusicTrack(
           id: 'track',
           title: 'Track',

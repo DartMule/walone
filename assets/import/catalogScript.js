@@ -1,9 +1,11 @@
-    const owner = String(targetOwnerID), id = String(targetID);
+    const owner = String(targetOwnerID || window.vk?.id || (document.cookie.match(/(?:^|;\s*)remixmid=(\d+)/) || [])[1] || ''), id = String(targetID);
+    if (!/^-?\d+$/.test(owner)) return {reason: 'access'};
     const tracks = [], seen = new Set();
     window.__waloneVKCancelled = false;
     let unavailable = 0;
     function clean(text) { const e = document.createElement('textarea'); e.innerHTML = String(text || ''); return e.value.trim(); }
     function add(raw) {
+        if (trackLimit > 0 && tracks.length >= trackLimit) return;
         const trackID = String(Array.isArray(raw) ? raw[0] : raw?.id);
         const ownerID = String(Array.isArray(raw) ? raw[1] : raw?.owner_id);
         if (!/^-?\d+$/.test(ownerID) || !/^\d+$/.test(trackID)) { unavailable++; return; }
@@ -35,7 +37,7 @@
     for (let page = 0; page < 1000; page++) {
         if (window.__waloneVKCancelled) return {reason: 'cancelled'};
         const params = new URLSearchParams({act: 'load_section', type: 'playlist', owner_id: owner,
-            playlist_id: id, offset: String(offset), is_loading_all: '1', access_hash: accessKey, access_key: accessKey});
+            playlist_id: id === 'all' ? '-1' : id, offset: String(offset), is_loading_all: '1', access_hash: accessKey, access_key: accessKey});
         const controller = new AbortController();
         window.__waloneVKRequest = controller;
         const timer = setTimeout(() => controller.abort(), 20000);
@@ -53,13 +55,14 @@
         const previousCount = tracks.length;
         section.list.forEach(add);
         const more = section.hasMore && section.hasMore !== '0';
-        if (!more) {
+        if (!more || trackLimit > 0 && tracks.length >= trackLimit) {
             const heading = document.querySelector('.au_playlist_title, .audio_playlist_title, [data-playlist-title], h1');
             const pageTitle = clean(document.title).replace(/\s*[|—–]\s*ВКонтакте.*$/, '');
-            return {tracks, unavailable, name: name || clean(heading?.textContent) || pageTitle || 'Плейлист VK'};
+            return {tracks, unavailable, name: (id === 'all' ? 'Моя музыка VK' : name) || clean(heading?.textContent) || pageTitle || 'Плейлист VK'};
         }
         if (!section.list.length || tracks.length === previousCount) return {reason: 'pagination'};
-        offset += section.list.length;
+        const nextOffset = Number(section.nextOffset);
+        offset = Number.isSafeInteger(nextOffset) && nextOffset > offset ? nextOffset : offset + section.list.length;
         await new Promise(resolve => setTimeout(resolve, 1500));
     }
     return {reason: 'pagination'};

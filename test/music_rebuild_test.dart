@@ -24,7 +24,7 @@ class _Repository extends MusicRepository {
   _Repository(_Audio audio)
     : super(Directory.systemTemp, audioFactory: () => audio) {
     library = MusicLibrary(
-      tracks: const [
+      tracks: [
         MusicTrack(
           id: 'test',
           title: 'Test',

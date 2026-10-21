@@ -183,7 +183,7 @@ Future<void> main(List<String> arguments) async {
     if (scenario == 'progress-only') {
       final music = context.read<MusicCubit>();
       final library = MusicLibrary(
-        tracks: const [
+        tracks: [
           MusicTrack(
             id: 'probe',
             title: 'Memory probe',

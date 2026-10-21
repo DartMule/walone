@@ -211,8 +211,9 @@ class VkSession {
 
   Future<Map<String, dynamic>> catalog(
     MusicLink link,
-    MusicProcess worker,
-  ) async {
+    MusicProcess worker, {
+    int limit = 500,
+  }) async {
     await open();
     final view = _view!;
     view.launch(link.url);
@@ -238,6 +239,7 @@ class VkSession {
         'targetID': link.id,
         'accessKey': link.accessKey,
         'isPlaylist': link.playlist,
+        'trackLimit': limit,
       },
       worker,
       timeout: const Duration(minutes: 30),

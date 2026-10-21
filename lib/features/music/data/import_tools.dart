@@ -12,7 +12,9 @@ import 'music_process.dart';
 List<String> requiredImportTools(ImportProvider provider) => [
   'ffmpeg',
   if (provider != ImportProvider.vk) 'yt-dlp',
-  if (provider == ImportProvider.youtube) 'javascript',
+  if (provider == ImportProvider.youtube || provider == ImportProvider.spotify)
+    'javascript',
+  if (provider == ImportProvider.spotify) 'spotdl',
 ];
 
 /// Инструменты хранятся отдельно от медиатеки и системных программ.
@@ -54,6 +56,7 @@ class ImportTools {
         final repo = switch (tool) {
           'yt-dlp' => 'yt-dlp/yt-dlp',
           'deno' => 'denoland/deno',
+          'spotdl' => 'spotDL/spotify-downloader',
           'ffmpeg' => 'BtbN/FFmpeg-Builds',
           _ => throw ArgumentError.value(name),
         };
@@ -67,6 +70,8 @@ class ImportTools {
         final arch = Platform.version.contains('arm64') ? 'aarch64' : 'x86_64';
         final assetName = switch (tool) {
           'yt-dlp' => Platform.isMacOS ? 'yt-dlp_macos' : 'yt-dlp.exe',
+          'spotdl' =>
+            'spotdl-${(release['tag_name'] as String).replaceFirst('v', '')}-${Platform.isMacOS ? 'darwin' : 'win32.exe'}',
           'deno' =>
             'deno-$arch-${Platform.isMacOS ? 'apple-darwin' : 'pc-windows-msvc'}.zip',
           _ => 'ffmpeg-master-latest-win64-gpl.zip',
@@ -202,7 +207,20 @@ class ImportTools {
       cancellation.cancel();
       deadline.cancel();
       client.close(force: true);
-      await staging.delete(recursive: true);
+      // Windows может ненадолго удерживать EXE после завершения проверки версии.
+      for (var attempt = 0; ; attempt++) {
+        try {
+          await staging.delete(recursive: true);
+          break;
+        } on FileSystemException catch (error) {
+          if (!Platform.isWindows ||
+              attempt >= 19 ||
+              ![5, 32].contains(error.osError?.errorCode)) {
+            rethrow;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+      }
     }
   }
 
