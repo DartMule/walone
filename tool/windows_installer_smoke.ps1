@@ -12,7 +12,7 @@ try {
     for ($attempt = 0; $attempt -lt 2; $attempt++) {
         $setup = Start-Process -FilePath $Installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$target`"", "/LOG=`"$log`"") -PassThru -Wait
         if ($setup.ExitCode -ne 0) { throw "Install attempt $attempt failed: $($setup.ExitCode), log: $log" }
-        foreach ($file in @('walone.exe', 'flutter_windows.dll', 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'data\app.so', 'data\flutter_assets\assets\catalog.json')) {
+        foreach ($file in @('walone.exe', 'flutter_windows.dll', 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'data\app.so', 'data\flutter_assets\assets\catalog.json', 'Legal\LICENSE.md', 'Legal\NOTICE.md')) {
             if (-not (Test-Path (Join-Path $target $file))) { throw "Missing installed file: $file" }
         }
         if ((Get-ItemPropertyValue $key -Name InstallLocation).TrimEnd('\') -ne $target) {

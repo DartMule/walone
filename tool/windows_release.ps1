@@ -40,6 +40,9 @@ try {
     if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
     New-Item -ItemType Directory -Force $stage | Out-Null
     Copy-Item "$release\*" $stage -Recurse
+    $legal = Join-Path $stage 'Legal'
+    New-Item -ItemType Directory -Force $legal | Out-Null
+    Copy-Item LICENSE.md,NOTICE.md $legal
     if (-not $CrtDirectory) {
         $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
         $visualStudio = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
