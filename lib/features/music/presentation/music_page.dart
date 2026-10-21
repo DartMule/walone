@@ -246,7 +246,7 @@ class MusicPageState extends State<MusicPage> {
                       const SceneBanner(
                         title: 'Ваша медиатека',
                         subtitle: 'Добавляйте файлы или импортируйте записи по ссылке.',
-                        icon: Icons.graphic_eq_rounded,
+                        icon: Icons.library_music_outlined,
                       ),
                       const SizedBox(height: 16),
                       Wrap(
