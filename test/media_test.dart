@@ -699,7 +699,12 @@ void main() {
         expect(players.any((player) => player.playing), isTrue);
         final paused = atmosphere.stream.firstWhere((state) => state.paused);
         lifecycle.add({'reason': 'sleep'});
+        // Ошибка плеера может прийти следом за отключением аудиовыхода.
+        atmosphere.audio.onError!('Ошибка декодирования аудио');
         await paused.timeout(const Duration(seconds: 2));
+        await Future<void>.delayed(Duration.zero);
+        expect(atmosphere.state.error, contains('аудиовыхода'));
+        expect(atmosphere.state.running, isTrue);
         expect(environment.last, isFalse);
         expect(music.state.playing, isFalse);
         expect(players.every((player) => player.disposed), isTrue);

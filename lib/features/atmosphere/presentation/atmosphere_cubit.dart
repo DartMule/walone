@@ -56,7 +56,7 @@ class AtmosphereCubit extends Cubit<AtmosphereState> {
       _running = false;
       await audio.stop();
       throw StateError(message);
-    });
+    }, skipWhenPaused: true);
     _keyboardSubscription = keyboard.stream.listen((state) {
       if (_applyingPreset || state.selected == null || state.busy) return;
       if (_mix.keyboardID == state.selected!.id &&
@@ -76,9 +76,8 @@ class AtmosphereCubit extends Cubit<AtmosphereState> {
     });
     _lifecycleSubscription =
         (lifecycle ??
-                const EventChannel(
-                  'dev.soyjanks.walone/lifecycle',
-                ).receiveBroadcastStream())
+                const EventChannel('dev.soyjanks.walone/lifecycle')
+                    .receiveBroadcastStream())
             .listen(
               (_) => interrupt(),
               onError: (Object _) {
@@ -134,9 +133,12 @@ class AtmosphereCubit extends Cubit<AtmosphereState> {
     }
   }
 
-  Future<void> _run(Future<void> Function() action) {
+  Future<void> _run(
+    Future<void> Function() action, {
+    bool skipWhenPaused = false,
+  }) {
     _tail = _tail.then((_) async {
-      if (isClosed) return;
+      if (isClosed || (skipWhenPaused && _paused)) return;
       try {
         _error = null;
         await action();
