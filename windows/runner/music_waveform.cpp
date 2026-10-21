@@ -15,6 +15,9 @@
 using Microsoft::WRL::ComPtr;
 
 namespace {
+constexpr DWORD kAudioStream = static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM);
+constexpr DWORD kAllStreams = static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS);
+
 void Check(HRESULT result) {
   if (FAILED(result)) throw std::runtime_error("Не удалось декодировать звук");
 }
@@ -46,14 +49,14 @@ void MusicWaveformReader::Decode(const std::shared_ptr<State>& state,
     Check(mf);
     ComPtr<IMFSourceReader> reader;
     Check(MFCreateSourceReaderFromURL(path.c_str(), nullptr, &reader));
-    Check(reader->SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS, FALSE));
-    Check(reader->SetStreamSelection(MF_SOURCE_READER_FIRST_AUDIO_STREAM, TRUE));
+    Check(reader->SetStreamSelection(kAllStreams, FALSE));
+    Check(reader->SetStreamSelection(kAudioStream, TRUE));
     ComPtr<IMFMediaType> type;
     Check(MFCreateMediaType(&type));
     Check(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio));
     Check(type->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_Float));
-    Check(reader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, nullptr, type.Get()));
-    Check(reader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, &type));
+    Check(reader->SetCurrentMediaType(kAudioStream, nullptr, type.Get()));
+    Check(reader->GetCurrentMediaType(kAudioStream, &type));
     const UINT32 rate = MFGetAttributeUINT32(type.Get(), MF_MT_AUDIO_SAMPLES_PER_SECOND, 0);
     const UINT32 channels = MFGetAttributeUINT32(type.Get(), MF_MT_AUDIO_NUM_CHANNELS, 0);
     if (rate < 50 || rate > 384000 || channels == 0 || channels > 32)
@@ -68,7 +71,7 @@ void MusicWaveformReader::Decode(const std::shared_ptr<State>& state,
            std::chrono::steady_clock::now() < deadline) {
       DWORD flags = 0;
       ComPtr<IMFSample> sample;
-      Check(reader->ReadSample(MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, nullptr,
+      Check(reader->ReadSample(kAudioStream, 0, nullptr,
                                &flags, nullptr, &sample));
       if (flags & (MF_SOURCE_READERF_ERROR | MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED))
         throw std::runtime_error("Изменился формат звука");
