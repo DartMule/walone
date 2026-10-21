@@ -6,13 +6,41 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include "resource.h"
 
 namespace {
 constexpr UINT kTrayMessage = WM_APP + 44;
 constexpr UINT kReopenMessage = WM_APP + 46;
 constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 constexpr wchar_t kRunName[] = L"WaloneFlutter";
+constexpr const char* kVolumeChannels[] = {"master", "music", "atmosphere", "keyboard"};
+constexpr const wchar_t* kVolumeTitles[] = {L"Общая громкость", L"Музыка", L"Атмосфера", L"Клавиатура"};
+constexpr UINT kVolumeCommand = 20;
+constexpr UINT kPresetCommand = 100;
+
+std::wstring MenuText(const std::wstring& text) {
+  // Данные пользователя не должны превращаться в мнемоники или колонки меню.
+  std::wstring result;
+  for (const auto c : text) {
+    result += c == L'\t' || c == L'\r' || c == L'\n' ? L' ' : c;
+    if (c == L'&') result += c;
+  }
+  return result;
+}
+
+uint32_t TrayColor() {
+  HIGHCONTRASTW contrast{sizeof(HIGHCONTRASTW)};
+  if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(contrast), &contrast, 0) &&
+      (contrast.dwFlags & HCF_HIGHCONTRASTON)) {
+    const COLORREF color = GetSysColor(COLOR_WINDOWTEXT);
+    return (GetRValue(color) << 16) | (GetGValue(color) << 8) | GetBValue(color);
+  }
+  DWORD light = 1;
+  DWORD bytes = sizeof(light);
+  RegGetValueW(HKEY_CURRENT_USER,
+      L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+      L"SystemUsesLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &bytes);
+  return light ? 0x000000 : 0xFFFFFF;
+}
 
 const flutter::EncodableValue* Field(const flutter::EncodableMap& map, const char* name) {
   const auto found = map.find(flutter::EncodableValue(name));
@@ -48,7 +76,8 @@ DesktopBridge::DesktopBridge(HWND window, flutter::BinaryMessenger* messenger,
   icon_.uID = 1;
   icon_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
   icon_.uCallbackMessage = kTrayMessage;
-  icon_.hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
+  tray_color_ = TrayColor();
+  RefreshMusicIcon();
   wcscpy_s(icon_.szTip, L"Walone — атмосфера работы");
   RestoreTray();
   channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
@@ -104,6 +133,26 @@ DesktopBridge::DesktopBridge(HWND window, flutter::BinaryMessenger* messenger,
         Shell_NotifyIconW(NIM_MODIFY, &icon_);
       } else if (method == "updateMusicTray") {
         UpdateMusicTray(call.arguments());
+      } else if (method == "updatePlayerTray") {
+        const auto* data = call.arguments() ? std::get_if<flutter::EncodableMap>(call.arguments()) : nullptr;
+        if (!data) throw std::runtime_error("Ожидается состояние плеера");
+        player_title_ = Wide(Text(*data, "title"));
+        player_playing_ = Flag(*data, "playing");
+        player_available_ = Flag(*data, "available");
+        player_loading_ = Flag(*data, "loading");
+      } else if (method == "updateVolumes") {
+        const auto* data = call.arguments() ? std::get_if<flutter::EncodableMap>(call.arguments()) : nullptr;
+        if (!data) throw std::runtime_error("Ожидаются уровни громкости от 0 до 1");
+        auto volumes = volumes_;
+        for (size_t i = 0; i < volumes.size(); ++i) {
+          const auto* value = Field(*data, kVolumeChannels[i]);
+          const auto* level = value ? std::get_if<double>(value) : nullptr;
+          if (!level || !std::isfinite(*level) || *level < 0 || *level > 1)
+            throw std::runtime_error("Ожидаются уровни громкости от 0 до 1");
+          volumes[i] = *level;
+        }
+        volumes_ = volumes;
+        keyboard_volume_enabled_ = Flag(*data, "keyboardEnabled");
       } else if (method == "updateTray") {
         const auto* data = call.arguments() ? std::get_if<flutter::EncodableMap>(call.arguments()) : nullptr;
         if (!data) throw std::runtime_error("Ожидается состояние трея");
@@ -144,9 +193,18 @@ void DesktopBridge::UpdateMusicTray(const flutter::EncodableValue* value) {
   }
   BOOL animations = TRUE;
   SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+  music_levels_ = {2.0 / 12, 7.0 / 12, 1, 7.0 / 12, 2.0 / 12};
+  if (bars && animations) for (size_t i = 0; i < music_levels_.size(); ++i)
+    music_levels_[i] = std::get<double>((*bars)[i]);
+  RefreshMusicIcon();
+}
+
+void DesktopBridge::RefreshMusicIcon() {
   HICON next = nullptr;
-  if (bars && animations) {
-    const int size = std::max(16, GetSystemMetrics(SM_CXSMICON));
+  {
+    const UINT dpi = GetDpiForWindow(window_);
+    const int size = std::max(16, GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : 96));
+    const uint32_t ink = 0xFF000000 | tray_color_;
     BITMAPINFO bitmap{};
     bitmap.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     bitmap.bmiHeader.biWidth = size;
@@ -162,13 +220,13 @@ void DesktopBridge::UpdateMusicTray(const flutter::EncodableValue* value) {
       auto* data = static_cast<uint32_t*>(pixels);
       std::fill(data, data + size * size, 0);
       for (int bar = 0; bar < 5; ++bar) {
-        const double height = (3 + 12 * std::get<double>((*bars)[bar])) * size / 18;
+        const double height = (3 + 12 * music_levels_[bar]) * size / 18;
         const double center = (2 + bar * 3.5) * size / 18;
         const double radius = 1.2 * size / 18;
         for (int y = 0; y < size; ++y) for (int x = 0; x < size; ++x) {
           const double dx = x + 0.5 - center;
           const double dy = std::max(0.0, std::abs(y + 0.5 - size / 2.0) - height / 2 + radius);
-          if (dx * dx + dy * dy <= radius * radius) data[y * size + x] = 0xFFF0E5D5;
+          if (dx * dx + dy * dy <= radius * radius) data[y * size + x] = ink;
         }
       }
       ICONINFO info{};
@@ -183,7 +241,7 @@ void DesktopBridge::UpdateMusicTray(const flutter::EncodableValue* value) {
   }
   const auto previous = music_icon_;
   music_icon_ = next;
-  icon_.hIcon = next ? next : LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
+  icon_.hIcon = next;
   auto update = icon_;
   update.uFlags = NIF_ICON;
   Shell_NotifyIconW(NIM_MODIFY, &update);
@@ -213,7 +271,7 @@ void DesktopBridge::Hide() {
 }
 
 void DesktopBridge::Action(const std::string& action, const std::string& id) {
-  if (action == "settings" || action == "atmosphere" || action == "timers") Show();
+  if (action == "settings" || action == "atmosphere" || action == "timers" || action == "music") Show();
   channel_->InvokeMethod("action", std::make_unique<flutter::EncodableValue>(
       flutter::EncodableMap{{flutter::EncodableValue("action"), flutter::EncodableValue(action)},
                             {flutter::EncodableValue("id"), flutter::EncodableValue(id)}}));
@@ -222,6 +280,29 @@ void DesktopBridge::Action(const std::string& action, const std::string& id) {
 void DesktopBridge::Menu() {
   const auto presets = presets_;
   HMENU menu = CreatePopupMenu();
+  AppendMenuW(menu, MF_STRING, 10, L"Открыть Walone");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  for (size_t i = 0; i < volumes_.size(); ++i) {
+    const int percent = static_cast<int>(std::lround(volumes_[i] * 100));
+    const auto title = std::wstring(kVolumeTitles[i]) + L"\t" + std::to_wstring(percent) + L" %";
+    HMENU levels = CreatePopupMenu();
+    for (int level = 0; level <= 10; ++level) {
+      const auto label = std::to_wstring(level * 10) + L" %";
+      AppendMenuW(levels, MF_STRING | (percent == level * 10 ? MF_CHECKED : 0),
+          kVolumeCommand + i * 11 + level, label.c_str());
+    }
+    AppendMenuW(menu, MF_POPUP | (i == 3 && !keyboard_volume_enabled_ ? MF_GRAYED : 0),
+        reinterpret_cast<UINT_PTR>(levels), title.c_str());
+  }
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  const auto player_title = MenuText(player_title_);
+  AppendMenuW(menu, MF_STRING, 11, player_title.empty() ? L"Моя музыка…" : player_title.c_str());
+  AppendMenuW(menu, MF_STRING | (player_available_ && !player_loading_ ? 0 : MF_GRAYED),
+      12, player_playing_ ? L"Приостановить музыку" : L"Воспроизвести музыку");
+  const UINT track_flags = MF_STRING | (!player_title_.empty() && !player_loading_ ? 0 : MF_GRAYED);
+  AppendMenuW(menu, track_flags, 13, L"Предыдущий трек");
+  AppendMenuW(menu, track_flags, 14, L"Следующий трек");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(menu, MF_STRING, 7, timer_title_.empty() ? L"Таймеры…" : timer_title_.c_str());
   if (!timer_title_.empty()) {
     AppendMenuW(menu, MF_STRING, 8, timer_running_ ? L"Приостановить таймер" : L"Запустить таймер");
@@ -236,10 +317,8 @@ void DesktopBridge::Menu() {
   if (!presets.empty()) {
     HMENU submenu = CreatePopupMenu();
     for (size_t i = 0; i < presets.size(); ++i) {
-      // MF_STRING интерпретирует & как мнемонику; удваиваем символ в имени.
-      std::wstring name;
-      for (const auto c : presets[i].name) { name += c; if (c == L'&') name += c; }
-      AppendMenuW(submenu, MF_STRING | (presets[i].id == selected_ ? MF_CHECKED : 0), 100 + i, name.c_str());
+      const auto name = MenuText(presets[i].name);
+      AppendMenuW(submenu, MF_STRING | (presets[i].id == selected_ ? MF_CHECKED : 0), kPresetCommand + i, name.c_str());
     }
     AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(submenu), L"Мои наборы");
   }
@@ -247,14 +326,30 @@ void DesktopBridge::Menu() {
   AppendMenuW(menu, MF_STRING, 6, L"Завершить Walone");
   POINT position;
   GetCursorPos(&position);
+  NOTIFYICONIDENTIFIER identifier{sizeof(identifier)};
+  identifier.hWnd = window_;
+  identifier.uID = icon_.uID;
+  RECT rect;
+  if (SUCCEEDED(Shell_NotifyIconGetRect(&identifier, &rect))) {
+    position = {(rect.left + rect.right) / 2, rect.top};
+  }
   SetForegroundWindow(window_);
   const UINT command = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
       position.x, position.y, 0, window_, nullptr);
   PostMessage(window_, WM_NULL, 0, 0);
   // Обновления Flutter во вложенном message loop могут заменить presets_.
   std::string preset;
-  if (command >= 100 && command - 100 < presets.size()) preset = presets[command - 100].id;
+  if (command >= kPresetCommand && command - kPresetCommand < presets.size()) preset = presets[command - kPresetCommand].id;
   DestroyMenu(menu);
+  if (command >= kVolumeCommand && command < kVolumeCommand + volumes_.size() * 11) {
+    const UINT choice = command - kVolumeCommand;
+    channel_->InvokeMethod("action", std::make_unique<flutter::EncodableValue>(
+        flutter::EncodableMap{
+          {flutter::EncodableValue("action"), flutter::EncodableValue("volume")},
+          {flutter::EncodableValue("channel"), flutter::EncodableValue(kVolumeChannels[choice / 11])},
+          {flutter::EncodableValue("value"), flutter::EncodableValue((choice % 11) / 10.0)}}));
+    return;
+  }
   switch (command) {
     case 1: Action("togglePause"); break;
     case 2: Action("pause15"); break;
@@ -265,11 +360,20 @@ void DesktopBridge::Menu() {
     case 7: Action("timers"); break;
     case 8: Action("toggleTimer"); break;
     case 9: Action("resetTimer"); break;
+    case 10: Show(); break;
+    case 11: Action("music"); break;
+    case 12: Action("toggleMusic"); break;
+    case 13: Action("previousTrack"); break;
+    case 14: Action("nextTrack"); break;
     default: if (!preset.empty()) Action("preset", preset); break;
   }
 }
 
 bool DesktopBridge::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+  if (message == WM_SETTINGCHANGE || message == WM_THEMECHANGED || message == WM_DPICHANGED) {
+    tray_color_ = TrayColor();
+    RefreshMusicIcon();
+  }
   if (message == WM_SHOWWINDOW) {
     appearance_channel_->InvokeMethod("visibility",
         std::make_unique<flutter::EncodableValue>(wparam != FALSE));
@@ -281,8 +385,8 @@ bool DesktopBridge::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
   if (message == kReopenMessage) { Show(); return true; }
   if (message != kTrayMessage) return false;
   const auto event = LOWORD(lparam);
-  if (event == WM_RBUTTONUP || event == WM_CONTEXTMENU) Menu();
-  if (event == WM_LBUTTONUP || event == NIN_KEYSELECT || event == NIN_SELECT) Show();
+  if (event == WM_CONTEXTMENU || event == NIN_KEYSELECT || event == NIN_SELECT) Menu();
+  if (event == WM_LBUTTONDBLCLK) Show();
   return true;
 }
 

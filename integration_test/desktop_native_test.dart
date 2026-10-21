@@ -22,6 +22,37 @@ void main() {
         isIn(['disabled', 'enabled', 'requiresApproval', 'notFound']),
       );
       expect(initial['trayAvailable'], isTrue);
+      await desktop.invokeMethod<void>('updateVolumes', {
+        'master': 0.7,
+        'music': 0.6,
+        'atmosphere': 0.5,
+        'keyboard': 0.35,
+        'keyboardEnabled': false,
+      });
+      await expectLater(
+        desktop.invokeMethod<void>('updateVolumes', {
+          'master': 1.1,
+          'music': 0.6,
+          'atmosphere': 0.5,
+          'keyboard': 0.35,
+        }),
+        throwsA(isA<PlatformException>()),
+      );
+      await desktop.invokeMethod<void>('updatePlayerTray', {
+        'title': 'Трек & музыка',
+        'playing': true,
+        'available': true,
+        'loading': false,
+      });
+      // И анимация, и возврат к статичному знаку должны сохранять доступный трей.
+      await desktop.invokeMethod<void>('updateMusicTray', [
+        0.0,
+        0.25,
+        0.5,
+        0.75,
+        1.0,
+      ]);
+      await desktop.invokeMethod<void>('updateMusicTray', null);
       await desktop.invokeMethod<void>('updateTray', {
         'paused': true,
         'running': false,
@@ -61,6 +92,12 @@ void main() {
       expect(cleared!['timerTitle'], isEmpty);
       if (Platform.isMacOS) expect(cleared['trayTimer'], isEmpty);
       await desktop.invokeMethod<void>('restoreTray');
+      await desktop.invokeMethod<void>('updatePlayerTray', {
+        'title': '',
+        'playing': false,
+        'available': false,
+        'loading': false,
+      });
       // Регистрацию в ОС не меняем: автоматическая проверка не включает автозапуск.
     },
   );

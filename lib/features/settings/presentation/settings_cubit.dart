@@ -171,7 +171,7 @@ class SettingsCubit extends Cubit<SettingsState> {
           'keyboardEnabled': snapshot.$5,
         });
       } on MissingPluginException {
-        // Нативные ползунки доступны в меню macOS.
+        // На платформах без управления громкостью в трее остаётся окно приложения.
       } catch (error) {
         if (!isClosed) _publish(error: '$error');
       }
@@ -198,7 +198,7 @@ class SettingsCubit extends Cubit<SettingsState> {
           'loading': value.loading,
         });
       } on MissingPluginException {
-        // Плеер в системном меню пока поддерживается только на macOS.
+        // На платформах без плеера в трее остаётся окно приложения.
       } catch (error) {
         if (!isClosed) _publish(error: '$error');
       }
