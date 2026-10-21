@@ -37,6 +37,7 @@ class DesktopBridge {
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> appearance_channel_;
   NOTIFYICONDATAW icon_{};
   HICON music_icon_ = nullptr;
+  bool music_animated_ = false;
   uint32_t tray_color_ = 0;
   UINT taskbar_created_;
   bool tray_available_ = false;

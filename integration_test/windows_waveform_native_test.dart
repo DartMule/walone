@@ -1,12 +1,54 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:walone/features/music/data/music_waveform.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('Windows передаёт пустой пакет амплитуд без ошибки codec', (
+    tester,
+  ) async {
+    const desktop = MethodChannel('dev.soyjanks.walone/desktop');
+    final batch = await desktop.invokeMapMethod<String, dynamic>(
+      'readWaveform',
+      'missing-waveform',
+    );
+    expect(batch, {'levels': isEmpty, 'done': true, 'failed': false});
+  }, skip: !Platform.isWindows);
+
+  testWidgets(
+    'Windows обновляет значок панели задач и восстанавливает на паузе',
+    (tester) async {
+      const desktop = MethodChannel('dev.soyjanks.walone/desktop');
+      try {
+        await desktop.invokeMethod<void>('updateMusicTray', [
+          0.0,
+          0.25,
+          0.5,
+          0.75,
+          1.0,
+        ]);
+        final status = await desktop.invokeMapMethod<String, dynamic>('status');
+        expect(
+          status!['taskbarAnimated'],
+          !tester
+              .binding
+              .platformDispatcher
+              .accessibilityFeatures
+              .disableAnimations,
+        );
+      } finally {
+        await desktop.invokeMethod<void>('updateMusicTray', null);
+      }
+      final paused = await desktop.invokeMapMethod<String, dynamic>('status');
+      expect(paused!['taskbarAnimated'], isFalse);
+    },
+    skip: !Platform.isWindows,
+  );
 
   testWidgets('Windows декодирует амплитуду без FFmpeg', (tester) async {
     final directory = await Directory.systemTemp.createTemp('walone-waveform-');

@@ -160,7 +160,10 @@ DesktopBridge::DesktopBridge(HWND window, flutter::BinaryMessenger* messenger,
           const auto batch = waveform_ && *id == waveform_id_
               ? waveform_->Read() : MusicWaveformReader::Batch{{}, true, false};
           result->Success(flutter::EncodableValue(flutter::EncodableMap{
-              {flutter::EncodableValue("levels"), flutter::EncodableValue(batch.levels)},
+              // C++ codec пишет пустой типизированный список без выравнивания для Dart.
+              {flutter::EncodableValue("levels"), batch.levels.empty()
+                  ? flutter::EncodableValue(flutter::EncodableList{})
+                  : flutter::EncodableValue(batch.levels)},
               {flutter::EncodableValue("done"), flutter::EncodableValue(batch.done)},
               {flutter::EncodableValue("failed"), flutter::EncodableValue(batch.failed)}}));
           return;
@@ -208,6 +211,7 @@ DesktopBridge::~DesktopBridge() {
   channel_->SetMethodCallHandler(nullptr);
   appearance_channel_->SetMethodCallHandler(nullptr);
   Shell_NotifyIconW(NIM_DELETE, &icon_);
+  SendMessageW(window_, WM_SETICON, ICON_BIG, GetClassLongPtrW(window_, GCLP_HICON));
   if (music_icon_) DestroyIcon(music_icon_);
 }
 
@@ -225,6 +229,7 @@ void DesktopBridge::UpdateMusicTray(const flutter::EncodableValue* value) {
   }
   BOOL animations = TRUE;
   SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+  music_animated_ = bars && animations;
   music_levels_ = {2.0 / 12, 7.0 / 12, 1, 7.0 / 12, 2.0 / 12};
   if (bars && animations) for (size_t i = 0; i < music_levels_.size(); ++i)
     music_levels_[i] = std::get<double>((*bars)[i]);
@@ -235,7 +240,7 @@ void DesktopBridge::RefreshMusicIcon() {
   HICON next = nullptr;
   {
     const UINT dpi = GetDpiForWindow(window_);
-    const int size = std::max(16, GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : 96));
+    const int size = std::max(32, GetSystemMetricsForDpi(SM_CXICON, dpi ? dpi : 96));
     const uint32_t ink = 0xFF000000 | tray_color_;
     BITMAPINFO bitmap{};
     bitmap.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -277,6 +282,8 @@ void DesktopBridge::RefreshMusicIcon() {
   auto update = icon_;
   update.uFlags = NIF_ICON;
   Shell_NotifyIconW(NIM_MODIFY, &update);
+  SendMessageW(window_, WM_SETICON, ICON_BIG, music_animated_
+      ? reinterpret_cast<LPARAM>(next) : GetClassLongPtrW(window_, GCLP_HICON));
   if (previous) DestroyIcon(previous);
 }
 
@@ -442,6 +449,8 @@ flutter::EncodableMap DesktopBridge::Status() {
   } else if (status != ERROR_FILE_NOT_FOUND) { Check(status); }
   return {{flutter::EncodableValue("login"), flutter::EncodableValue(login)},
           {flutter::EncodableValue("trayAvailable"), flutter::EncodableValue(tray_available_)},
+          {flutter::EncodableValue("taskbarAnimated"), flutter::EncodableValue(
+              music_icon_ && reinterpret_cast<HICON>(SendMessageW(window_, WM_GETICON, ICON_BIG, 0)) == music_icon_)},
           {flutter::EncodableValue("timerTitle"), flutter::EncodableValue(timer_title_utf8_)},
           {flutter::EncodableValue("windowVisible"), flutter::EncodableValue(IsWindowVisible(window_) != FALSE)}};
 }
