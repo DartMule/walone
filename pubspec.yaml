@@ -1,7 +1,7 @@
 name: walone
 description: "Walone — звуки клавиатуры для macOS и Windows."
 publish_to: 'none'
-version: 0.1.5+6
+version: 0.1.5+9
 
 environment:
   sdk: ^3.13.0
