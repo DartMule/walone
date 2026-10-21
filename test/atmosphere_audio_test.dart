@@ -7,7 +7,14 @@ import 'media_fakes.dart';
 
 class RecordingAudio extends FakeAudio {
   final levels = <double>[];
+  final paused = Completer<void>();
   bool failVolume = false;
+
+  @override
+  Future<void> pause() async {
+    await super.pause();
+    if (!paused.isCompleted) paused.complete();
+  }
 
   @override
   Future<void> setVolume(double value) async {
@@ -209,7 +216,8 @@ void main() {
       expect(players.every((player) => player.playing), isTrue);
       expect(players.first.volume, inExclusiveRange(0, 0.6));
       expect(players.last.volume, inExclusiveRange(0, 0.6));
-      await Future<void>.delayed(const Duration(milliseconds: 2200));
+      await players.first.paused.future.timeout(const Duration(seconds: 10));
+      await Future<void>.delayed(Duration.zero);
       expect(players.first.playing, isFalse);
       expect(players.first.volume, 0);
       expect(players.last.volume, closeTo(0.6, 0.0001));
@@ -219,8 +227,11 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(players.every((player) => player.playing), isTrue);
       await audio.update({'rain': 0.3});
-      // Завершаем обе асинхронные записи громкости текущего шага перехода.
+      // Проверяем точную мощность после перехода: во время него два плеера
+      // обновляют громкость асинхронно и замер может попасть между записями.
+      await players.last.paused.future.timeout(const Duration(seconds: 10));
       await Future<void>.delayed(Duration.zero);
+      expect(players.last.playing, isFalse);
       expect(
         players.fold<double>(
           0,
