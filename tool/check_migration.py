@@ -9,7 +9,7 @@ APP = Path(__file__).resolve().parents[1]
 SOURCE = APP / 'tool/resource_sources'
 ASSETS = APP / 'assets'
 
-catalog = json.loads((ASSETS / 'catalog.json').read_text())
+catalog = json.loads((ASSETS / 'catalog.json').read_text(encoding='utf-8'))
 assert len(catalog) == 20
 expected = set()
 for pack in catalog:
@@ -33,11 +33,11 @@ for name in ['CC0-1.0.txt', 'CC-BY-3.0.txt', 'CC-BY-4.0.txt']:
 for name in ['catalogScript.js', 'resolveScript.js']:
     assert (ASSETS / 'import' / name).read_bytes() == (SOURCE / 'import' / name).read_bytes(), name
 # Эталон переноса хранится в самом проекте, а не в архиве старого приложения.
-baseline = json.loads((SOURCE / 'bundled-sha256.json').read_text())
-actual = {str(p.relative_to(ASSETS)): hashlib.sha256(p.read_bytes()).hexdigest()
+baseline = json.loads((SOURCE / 'bundled-sha256.json').read_text(encoding='utf-8'))
+actual = {p.relative_to(ASSETS).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
           for p in ASSETS.rglob('*') if p.is_file() and not p.name.startswith('.')}
 assert actual == baseline, 'Состав или содержимое ресурсов изменились относительно эталона'
-project = (APP / 'macos/Runner.xcodeproj/project.pbxproj').read_text()
+project = (APP / 'macos/Runner.xcodeproj/project.pbxproj').read_text(encoding='utf-8')
 for path in re.findall(r'path = ([^;]+\.swift);', project):
     assert not Path(path).is_absolute() and '..' not in Path(path).parts, path
 for name in ['KeyboardAudio.swift', 'AudioOutputMonitor.swift', 'SensorStream.swift',

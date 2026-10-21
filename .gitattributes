@@ -1,0 +1,3 @@
+# Ресурсы сверяются побайтово с SHA-256 на всех платформах.
+assets/** -text
+tool/resource_sources/** -text
