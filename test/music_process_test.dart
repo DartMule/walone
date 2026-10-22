@@ -1,9 +1,60 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
+import 'package:walone/core/storage.dart';
 import 'package:walone/features/music/data/music_process.dart';
 
 void main() {
+  test('Полный runtime yt-dlp обнаруживается раньше старой сборки', () async {
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
+    const channel = MethodChannel('plugins.flutter.io/path_provider');
+    final root = await Directory.systemTemp.createTemp(
+      'walone-runtime-finder-',
+    );
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (_) async => root.path,
+    );
+    try {
+      final managed = p.join(
+        (await JsonStore.applicationDirectory()).path,
+        'ImportTools',
+      );
+      final runtime = File(p.join(managed, 'yt-dlp_macos', 'yt-dlp_macos'));
+      await runtime.parent.create(recursive: true);
+      await runtime.writeAsString(
+        '#!/bin/sh\n/bin/sleep 0.1\necho 2026.10.21\n',
+      );
+      final old = File(p.join(managed, 'yt-dlp'));
+      await old.writeAsString('#!/bin/sh\necho old\n');
+      for (final file in [runtime, old]) {
+        await Process.run('/bin/chmod', ['700', file.path]);
+      }
+      final found = await runZoned(
+        () => MusicProcess.executable('yt-dlp'),
+        zoneSpecification: ZoneSpecification(
+          createTimer: (self, parent, zone, duration, callback) =>
+              parent.createTimer(
+                zone,
+                duration == const Duration(seconds: 15)
+                    ? const Duration(milliseconds: 20)
+                    : duration,
+                callback,
+              ),
+        ),
+      );
+      expect(found, runtime.path);
+      await runtime.writeAsString('#!/bin/sh\nexit 42\n');
+      expect(await MusicProcess.executable('yt-dlp'), old.path);
+    } finally {
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+      await root.delete(recursive: true);
+    }
+  }, skip: !Platform.isMacOS);
+
   for (final sample in [
     (
       'WARNING: The provided YouTube account cookies are no longer valid.\nERROR: Sign in to confirm you are not a bot.',

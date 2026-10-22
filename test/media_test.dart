@@ -379,6 +379,40 @@ void main() {
   });
 
   test(
+    'Сбой yt-dlp не мешает установить spotDL, повтор качает только недостающее',
+    () async {
+      final available = {'ffmpeg', 'deno'};
+      final attempts = <String>[];
+      var fail = true;
+      final importer = ImportCubit(
+        music,
+        FakeVkSession(root),
+        toolFinder: (name) async {
+          if (!available.contains(name)) throw StateError('Отсутствует');
+          return name;
+        },
+        toolInstaller: (name, worker, temporary, status) async {
+          attempts.add(name);
+          if (name == 'yt-dlp' && fail) throw StateError('Сеть недоступна');
+          available.add(name);
+        },
+      );
+      try {
+        await importer.installTools(ImportProvider.spotify);
+        expect(attempts, ['yt-dlp', 'spotdl']);
+        expect(importer.state.error, contains('yt-dlp: Сеть недоступна'));
+        expect((await importer.checkTools())['spotdl'], isTrue);
+        fail = false;
+        await importer.installTools(ImportProvider.spotify);
+        expect(attempts, ['yt-dlp', 'spotdl', 'yt-dlp']);
+        expect(importer.state.error, isNull);
+      } finally {
+        await importer.close();
+      }
+    },
+  );
+
+  test(
     'Ошибка загрузки компонентов не меняет медиатеку и допускает повтор',
     () async {
       final before = repository.library.toJson();

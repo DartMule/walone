@@ -56,19 +56,37 @@ class ImportCubit extends Cubit<ImportState> {
     };
   }
 
-  Future<void> installTools(ImportProvider provider) =>
-      _run((worker, root) async {
-        final tools = await checkTools();
-        for (final name in requiredImportTools(provider)) {
-          worker.check();
-          if (!tools[name]!) await toolInstaller(name, worker, root, _status);
-        }
-        final checked = await checkTools();
-        if (requiredImportTools(provider).any((name) => !checked[name]!)) {
-          throw StateError('Не все компоненты готовы. Повторите проверку.');
-        }
-        return 'Компоненты установлены. Можно импортировать музыку.';
-      });
+  Future<void> installTools(ImportProvider provider) => _run((
+    worker,
+    root,
+  ) async {
+    final tools = await checkTools();
+    final errors = <String, String>{};
+    for (final name in requiredImportTools(provider)) {
+      worker.check();
+      if (tools[name]!) continue;
+      try {
+        await toolInstaller(name, worker, root, _status);
+      } on ImportCancelled {
+        rethrow;
+      } catch (error) {
+        worker.check();
+        errors[name] = error is StateError ? error.message : '$error';
+      }
+    }
+    final checked = await checkTools();
+    final missing = requiredImportTools(provider)
+        .where((name) => !checked[name]!)
+        .toList();
+    if (missing.isNotEmpty) {
+      throw StateError(
+        'Не удалось подготовить компоненты:\n'
+        '${missing.map((name) => '$name: ${errors[name] ?? 'не проходит проверку запуска'}').join('\n')}\n'
+        'Готовые компоненты сохранены. Повторите загрузку недостающих.',
+      );
+    }
+    return 'Компоненты установлены. Можно импортировать музыку.';
+  });
   final MusicCubit music;
   final VkSession vk;
   MusicProcess? _worker;

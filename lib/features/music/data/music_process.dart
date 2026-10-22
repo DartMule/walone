@@ -26,8 +26,12 @@ class MusicProcess {
   static Future<String> executable(String name) async {
     final env = Platform.environment;
     final home = env[Platform.isWindows ? 'USERPROFILE' : 'HOME'] ?? '';
+    final managed = p.join(
+      (await JsonStore.applicationDirectory()).path,
+      'ImportTools',
+    );
     final dirs = [
-      p.join((await JsonStore.applicationDirectory()).path, 'ImportTools'),
+      managed,
       p.join(p.dirname(Platform.resolvedExecutable), 'tools'),
       '/opt/homebrew/bin',
       '/usr/local/bin',
@@ -44,11 +48,16 @@ class MusicProcess {
         dirs.addAll(versions.map((d) => p.join(d.path, 'bin')));
       }
     }
-    for (final dir in dirs.where((d) => d.isNotEmpty)) {
-      final path = p.join(
-        dir.replaceAll('"', ''),
-        '$name${Platform.isWindows ? '.exe' : ''}',
-      );
+    final paths = [
+      if (Platform.isMacOS && name == 'yt-dlp')
+        p.join(managed, 'yt-dlp_macos', 'yt-dlp_macos'),
+      for (final dir in dirs.where((d) => d.isNotEmpty))
+        p.join(
+          dir.replaceAll('"', ''),
+          '$name${Platform.isWindows ? '.exe' : ''}',
+        ),
+    ];
+    for (final path in paths) {
       if (await File(path).exists()) {
         try {
           await verify(path, name);
@@ -66,8 +75,13 @@ class MusicProcess {
   static Future<void> verify(
     String path,
     String name, {
-    Duration timeout = const Duration(seconds: 15),
+    Duration? timeout,
   }) async {
+    // На первом запуске macOS проверяет библиотеки Python-сборок. Проверка
+    // после установки должна давать им столько же времени, сколько установщик.
+    timeout ??= Platform.isMacOS && (name == 'yt-dlp' || name == 'spotdl')
+        ? const Duration(minutes: 2)
+        : const Duration(seconds: 15);
     final Process process;
     try {
       process = await Process.start(path, [
