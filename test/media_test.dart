@@ -51,7 +51,7 @@ void main() {
     output = FakeAudio();
   });
   tearDown(() async {
-    await music.close();
+    if (!music.isClosed) await music.close();
     await output.dispose();
     await root.delete(recursive: true);
   });
@@ -344,6 +344,59 @@ void main() {
     }
   });
 
+  test(
+    'Проверяются только компоненты источника и один подходящий runtime',
+    () async {
+      final calls = <String>[];
+      var denoAvailable = true;
+      final importer = ImportCubit(
+        music,
+        FakeVkSession(root),
+        toolFinder: (name) async {
+          calls.add(name);
+          if (name == 'deno' && !denoAvailable) throw StateError('Отсутствует');
+          return name;
+        },
+      );
+      try {
+        for (final (provider, playlist, expected) in [
+          (ImportProvider.youtube, false, ['ffmpeg', 'yt-dlp', 'deno']),
+          (ImportProvider.spotify, true, ['ffmpeg', 'yt-dlp', 'deno']),
+          (
+            ImportProvider.spotify,
+            false,
+            ['ffmpeg', 'yt-dlp', 'deno', 'spotdl'],
+          ),
+          (ImportProvider.soundcloud, false, ['ffmpeg', 'yt-dlp']),
+          (ImportProvider.vk, false, ['ffmpeg']),
+        ]) {
+          calls.clear();
+          final result = await importer.checkTools(
+            provider: provider,
+            spotifyPlaylist: playlist,
+          );
+          expect(calls, expected);
+          expect(
+            requiredImportTools(
+              provider,
+              spotifyPlaylist: playlist,
+            ).every((name) => result[name]!),
+            isTrue,
+          );
+        }
+        calls.clear();
+        denoAvailable = false;
+        final result = await importer.checkTools(
+          provider: ImportProvider.youtube,
+        );
+        expect(calls, ['ffmpeg', 'yt-dlp', 'deno', 'node']);
+        expect(result['javascript'], isTrue);
+      } finally {
+        await importer.close();
+      }
+    },
+  );
+
   test('Компоненты: альтернативный runtime, загрузка только недостающего и повторная проверка', () async {
     final available = {'ffmpeg', 'yt-dlp'};
     final installed = <String>[];
@@ -573,6 +626,20 @@ void main() {
       await tester.tap(find.text('Проверить снова'));
       await tester.pumpAndSettle();
       expect(importButton().onPressed, isNotNull);
+      await tester.enterText(
+        find.byType(TextField).first,
+        'https://open.spotify.com/playlist/6li523Zf0m6rr9j2tixnjJ',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('spotdl'), findsNothing);
+      expect(importButton().onPressed, isNotNull);
+      await tester.enterText(
+        find.byType(TextField).first,
+        'https://open.spotify.com/album/1234567890123456789012',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('spotdl'), findsOneWidget);
+      expect(importButton().onPressed, isNull);
       await tester.enterText(
         find.byType(TextField).first,
         'https://vk.ru/audio1_2',
@@ -810,6 +877,144 @@ void main() {
       await tester.runAsync(importer.close);
     }
   }, timeout: const Timeout(Duration(seconds: 30)));
+
+  testWidgets('Импорт сворачивается, обновляется и отменяется из панели', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final started = Completer<void>();
+    final release = Completer<void>();
+    final worker = FakeProcess();
+    late void Function(String) progress;
+    var toolChecks = 0;
+    final importer = ImportCubit(
+      music,
+      FakeVkSession(root),
+      toolFinder: (name) async {
+        toolChecks++;
+        return name;
+      },
+      workerFactory: () => worker,
+      spotifyPlaylistLoader: (_, worker, _, status) async {
+        progress = status;
+        status('Получаем названия и исполнителей Spotify…');
+        started.complete();
+        await release.future;
+        worker.check();
+        return [];
+      },
+    );
+    Future<void> waitUntil(bool Function() ready) async {
+      for (var i = 0; i < 100 && !ready(); i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      expect(ready(), isTrue, reason: importer.state.error);
+    }
+
+    Future<void> transition() async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+    }
+
+    try {
+      await tester.pumpWidget(
+        BlocProvider.value(
+          value: importer,
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () => showMusicImportDialog(context),
+                  child: const Text('Открыть'),
+                ),
+                bottomNavigationBar: const MusicImportBar(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Открыть'));
+      await tester.pumpAndSettle();
+      const link = 'https://open.spotify.com/playlist/6li523Zf0m6rr9j2tixnjJ';
+      await tester.enterText(find.byType(TextField).first, link);
+      await tester.enterText(find.byType(TextField).last, '0');
+      await tester.tap(find.text('Без cookies браузера'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Firefox'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Импортировать'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.text('Импортировать'));
+      await waitUntil(() => started.isCompleted);
+      expect(importer.state.busy, isTrue, reason: importer.state.error);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Свернуть'));
+      await transition();
+      expect(find.byType(MusicImportDialog), findsNothing);
+      expect(importer.state.busy, isTrue);
+      expect(worker.cancelled, isFalse);
+      const status =
+          'Spotify: трек 42 из 1166. Добавлено: 38. Пропущено: 3.\n'
+          'Загружаем и сохраняем аудио…';
+      progress(status);
+      await tester.pump();
+      expect(find.text(status), findsOneWidget);
+      tester.view.physicalSize = const Size(380, 680);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final beforeReopen = toolChecks;
+      await tester.tap(find.byTooltip('Развернуть импорт'));
+      await transition();
+      expect(find.byType(MusicImportDialog), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+        link,
+      );
+      expect(
+        tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+        '0',
+      );
+      expect(find.text('Firefox'), findsOneWidget);
+      expect(toolChecks, beforeReopen);
+      await tester.tap(find.text('Свернуть'));
+      await transition();
+      await tester.tap(find.byTooltip('Отменить импорт'));
+      expect(worker.cancelled, isTrue);
+      release.complete();
+      await waitUntil(() => !importer.state.busy);
+      await tester.pump();
+      expect(find.textContaining('Импорт отменён'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await tester.tap(find.byTooltip('Скрыть импорт'));
+      await tester.pump();
+      expect(find.textContaining('Импорт отменён'), findsNothing);
+      expect(tester.takeException(), isNull);
+    } finally {
+      if (!release.isCompleted) release.complete();
+      await tester.pumpWidget(const SizedBox.shrink());
+      var closed = false;
+      final closing = importer.close().then((_) => closed = true);
+      await waitUntil(() => closed);
+      await closing;
+      var musicClosed = false;
+      final closingMusic = music.close().then((_) => musicClosed = true);
+      await waitUntil(() => musicClosed);
+      await closingMusic;
+    }
+  });
 
   testWidgets('Пустая медиатека не занимает место плеером', (tester) async {
     await tester.pumpWidget(

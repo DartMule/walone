@@ -18,6 +18,7 @@ import 'features/keyboard/presentation/keyboard_page.dart';
 import 'features/music/data/music_repository.dart';
 import 'features/music/data/vk_session.dart';
 import 'features/music/presentation/import_cubit.dart';
+import 'features/music/presentation/music_dialogs.dart';
 import 'features/music/presentation/music_cubit.dart';
 import 'features/music/presentation/music_logo.dart';
 import 'features/music/presentation/music_page.dart';
@@ -418,9 +419,12 @@ class _WorkspacePageState extends State<WorkspacePage>
             ],
           ),
         ),
-        bottomNavigationBar: wide
-            ? null
-            : FrostedPanel(
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const MusicImportBar(),
+            if (!wide)
+              FrostedPanel(
                 radius: 0,
                 sidebar: true,
                 child: NavigationBar(
@@ -440,6 +444,8 @@ class _WorkspacePageState extends State<WorkspacePage>
                   ],
                 ),
               ),
+          ],
+        ),
       );
     },
   );

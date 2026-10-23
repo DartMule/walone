@@ -10,6 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:walone/features/music/data/music_repository.dart';
+import 'package:walone/features/music/data/music_process.dart';
 import 'package:walone/features/music/domain/import.dart';
 import 'package:walone/features/music/domain/music.dart';
 import 'package:walone/features/music/presentation/import_cubit.dart';
@@ -24,6 +25,22 @@ class PlaylistProcess extends FakeProcess {
   final String artist;
   final List<String>? artists;
   final Object? metadataError;
+  List<Map<String, dynamic>> get spotifySongs => [
+    {
+      'song_id': 'spotify-song',
+      if (artists != null) 'artists': artists,
+      'name': 'Песня',
+      'artist': 'Автор',
+      'duration': 10,
+      'list_name': 'Spotify список',
+    },
+  ];
+  static Future<List<Map<String, dynamic>>> catalog(
+    MusicLink link,
+    dynamic worker,
+    int limit,
+    void Function(String) status,
+  ) async => (worker as PlaylistProcess).spotifySongs;
   @override
   Future<String> run(
     String tool,
@@ -34,18 +51,8 @@ class PlaylistProcess extends FakeProcess {
   }) async {
     if (tool == 'spotdl') {
       calls.add(arguments);
-      await File(arguments[arguments.indexOf('--save-file') + 1]).writeAsString(
-        jsonEncode([
-          {
-            'song_id': 'spotify-song',
-            if (artists != null) 'artists': artists,
-            'name': 'Песня',
-            'artist': 'Автор',
-            'duration': 10,
-            'list_name': 'Spotify список',
-          },
-        ]),
-      );
+      await File(arguments[arguments.indexOf('--save-file') + 1])
+          .writeAsString(jsonEncode(spotifySongs));
       return '';
     }
     if (arguments.contains('--dump-single-json')) {
@@ -80,6 +87,31 @@ class PlaylistProcess extends FakeProcess {
       calls.add(arguments);
       await File(p.join(directory.path, 'source.m4a')).writeAsString('10');
       return '';
+    }
+    return super.run(
+      tool,
+      arguments,
+      directory,
+      timeout: timeout,
+      capture: capture,
+    );
+  }
+}
+
+class InterruptedSpotifyProcess extends PlaylistProcess {
+  var metadataCalls = 0;
+  @override
+  Future<String> run(
+    String tool,
+    List<String> arguments,
+    Directory directory, {
+    Duration timeout = const Duration(minutes: 60),
+    bool capture = false,
+  }) async {
+    if (arguments.contains('--dump-single-json') &&
+        arguments.last.startsWith('https://www.youtube.com/watch') &&
+        ++metadataCalls == 2) {
+      throw YoutubeAccessRequired('Не удалось прочитать cookies браузера');
     }
     return super.run(
       tool,
@@ -521,6 +553,211 @@ void main() {
     },
   );
 
+  test('Spotify сохраняет и показывает добавленный трек при последующей ошибке cookies', () async {
+    final worker = InterruptedSpotifyProcess();
+    final importer = ImportCubit(
+      music,
+      FakeVkSession(root),
+      toolFinder: (name) async => name,
+      workerFactory: () => worker,
+      spotifyPlaylistLoader: (link, worker, limit, status) async => [
+        ...PlaylistProcess().spotifySongs,
+        {...PlaylistProcess().spotifySongs.first, 'song_id': 'second-song'},
+      ],
+    );
+    addTearDown(importer.close);
+    await importer.remote(
+      ImportProvider.spotify,
+      'https://open.spotify.com/playlist/6li523Zf0m6rr9j2tixnjJ',
+      youtubeBrowser: 'chrome',
+    );
+    expect(
+      importer.state.error,
+      contains('Не удалось прочитать cookies браузера'),
+    );
+    expect(importer.state.error, contains('Добавлено: 1'));
+    expect(importer.state.error, contains('Уже добавленные треки сохранены'));
+    expect(repository.library.tracks.single.sourceID, 'spotify:spotify-song');
+    expect(
+      music.state.library.tracks.single.id,
+      repository.library.tracks.single.id,
+    );
+    final saved = (await repository.database.load())!;
+    expect(saved.playlists.single.trackIDs, [saved.tracks.single.id]);
+    expect(saved.selectedID, saved.playlists.single.id);
+    expect(
+      await File(repository.pathFor(saved.tracks.single)).exists(),
+      isTrue,
+    );
+    expect(importer.state.busy, isFalse);
+    expect(music.state.importing, isFalse);
+  });
+
+  test('Ошибка cookies прекращает Spotify после первой попытки', () async {
+    final invocations = File(p.join(root.path, 'cookie-attempts'));
+    final tool = File(p.join(root.path, 'cookie-tool'));
+    await tool.writeAsString(
+      "#!/bin/sh\necho attempt >> '${invocations.path}'\n"
+      "echo 'ERROR: Could not find Chrome cookies database in private-profile' >&2\nexit 1\n",
+    );
+    await Process.run('/bin/chmod', ['700', tool.path]);
+    final importer = ImportCubit(
+      music,
+      FakeVkSession(root),
+      toolFinder: (_) async => tool.path,
+      spotifyPlaylistLoader: (link, worker, limit, status) async =>
+          List.generate(3, (_) => PlaylistProcess().spotifySongs.first),
+    );
+    addTearDown(importer.close);
+    await importer.remote(
+      ImportProvider.spotify,
+      'https://open.spotify.com/playlist/6li523Zf0m6rr9j2tixnjJ',
+      youtubeBrowser: 'chrome',
+    );
+    expect((await invocations.readAsLines()).length, 1);
+    expect(
+      importer.state.error,
+      contains('Не удалось прочитать cookies браузера'),
+    );
+    expect(importer.state.error, isNot(contains('private-profile')));
+    expect(importer.state.error, contains('Добавлено: 0'));
+    expect(importer.state.error, contains('трек 1 из 3'));
+    expect(repository.library.tracks, isEmpty);
+    expect(importer.state.busy, isFalse);
+  }, skip: Platform.isWindows);
+
+  test('Блокировка YouTube останавливает Spotify без повторов для остальных треков', () async {
+    final worker = PlaylistProcess(
+      metadataError: YoutubeAccessRequired(
+        'YouTube запросил проверку «не бот»',
+      ),
+    );
+    final importer = ImportCubit(
+      music,
+      FakeVkSession(root),
+      toolFinder: (name) async => name,
+      workerFactory: () => worker,
+      spotifyPlaylistLoader: (link, worker, limit, status) async {
+        final songs = (worker as PlaylistProcess).spotifySongs;
+        return [...songs, ...songs];
+      },
+    );
+    addTearDown(importer.close);
+    await importer.remote(
+      ImportProvider.spotify,
+      'https://open.spotify.com/playlist/6li523Zf0m6rr9j2tixnjJ',
+    );
+    expect(
+      importer.state.error,
+      contains('YouTube запросил проверку «не бот»'),
+    );
+    expect(
+      worker.calls.where((args) => args.last.startsWith('ytsearch')).length,
+      1,
+    );
+    expect(repository.library.tracks, isEmpty);
+    expect(music.state.importing, isFalse);
+  });
+
+  test('Успешная ссылка Spotify не импортируется повторно', () async {
+    final worker = PlaylistProcess();
+    final importer = ImportCubit(
+      music,
+      FakeVkSession(root),
+      spotifyPlaylistLoader: PlaylistProcess.catalog,
+      toolFinder: (name) async => name,
+      workerFactory: () => worker,
+    );
+    addTearDown(importer.close);
+    const url = 'https://open.spotify.com/playlist/6li523Zf0m6rr9j2tixnjJ';
+    await importer.remote(ImportProvider.spotify, '$url?si=first');
+    expect(importer.state.error, isNull);
+    final calls = worker.calls.length;
+    final playlists = repository.library.playlists.length;
+    importer.clearResult();
+    await importer.remote(
+      ImportProvider.spotify,
+      'https://open.spotify.com/intl-ru/playlist/6li523Zf0m6rr9j2tixnjJ?si=second',
+    );
+    expect(worker.calls.length, calls);
+    expect(repository.library.playlists.length, playlists);
+  });
+
+  testWidgets('Окно блокирует успешно импортированную ссылку Spotify', (
+    tester,
+  ) async {
+    final importer = ImportCubit(
+      music,
+      FakeVkSession(root),
+      spotifyPlaylistLoader: PlaylistProcess.catalog,
+      toolFinder: (name) async => name,
+      workerFactory: PlaylistProcess.new,
+    );
+    addTearDown(importer.close);
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const url = 'https://open.spotify.com/playlist/6li523Zf0m6rr9j2tixnjJ';
+    await tester.pumpWidget(
+      BlocProvider.value(
+        value: importer,
+        child: const MaterialApp(home: Scaffold(body: MusicImportDialog())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, url);
+    await tester.pumpAndSettle();
+    FilledButton button() => tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Импортировать'),
+    );
+    expect(button().onPressed, isNotNull);
+    await tester.runAsync(() => importer.remote(ImportProvider.spotify, url));
+    await tester.pumpAndSettle();
+    expect(button().onPressed, isNull);
+    expect(find.text('Эта ссылка уже импортирована.'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, '$url?si=changed');
+    await tester.pumpAndSettle();
+    expect(button().onPressed, isNull);
+    await tester.enterText(
+      find.byType(TextField).first,
+      'https://open.spotify.com/playlist/1234567890123456789012',
+    );
+    await tester.pumpAndSettle();
+    expect(button().onPressed, isNotNull);
+  });
+
+  test(
+    'Ошибка и отмена Spotify оставляют возможность повторить импорт',
+    () async {
+      var worker = PlaylistProcess(
+        metadataError: StateError('Сеть недоступна'),
+      );
+      final importer = ImportCubit(
+        music,
+        FakeVkSession(root),
+        spotifyPlaylistLoader: PlaylistProcess.catalog,
+        toolFinder: (name) async => name,
+        workerFactory: () => worker,
+      );
+      addTearDown(importer.close);
+      const url = 'https://open.spotify.com/playlist/6li523Zf0m6rr9j2tixnjJ';
+      await importer.remote(ImportProvider.spotify, url);
+      expect(importer.state.error, isNotNull);
+      expect(importer.hasImported(ImportProvider.spotify, url), isFalse);
+      worker = PlaylistProcess()..cancelAt = 1;
+      await importer.remote(ImportProvider.spotify, url);
+      expect(importer.state.error, contains('Импорт отменён'));
+      expect(importer.hasImported(ImportProvider.spotify, url), isFalse);
+      worker = PlaylistProcess();
+      await importer.remote(ImportProvider.spotify, url);
+      expect(importer.state.error, isNull);
+      expect(importer.hasImported(ImportProvider.spotify, url), isTrue);
+      expect(importer.state.busy, isFalse);
+      expect(music.state.importing, isFalse);
+    },
+  );
+
   test(
     'Spotify получает метаданные и сохраняет найденный трек YouTube',
     () async {
@@ -528,6 +765,7 @@ void main() {
       final importer = ImportCubit(
         music,
         FakeVkSession(root),
+        spotifyPlaylistLoader: PlaylistProcess.catalog,
         toolFinder: (name) async => name,
         workerFactory: () => worker,
       );
@@ -696,6 +934,7 @@ void main() {
       final importer = ImportCubit(
         music,
         FakeVkSession(root),
+        spotifyPlaylistLoader: PlaylistProcess.catalog,
         toolFinder: (name) async => name,
         workerFactory: () => worker,
       );

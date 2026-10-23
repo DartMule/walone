@@ -13,6 +13,105 @@ import '../domain/music.dart';
 import 'import_cubit.dart';
 import 'music_cubit.dart';
 
+Future<void> showMusicImportDialog(BuildContext context) {
+  final cubit = context.read<ImportCubit>();
+  return showDialog<void>(
+    context: context,
+    builder: (_) =>
+        BlocProvider.value(value: cubit, child: const MusicImportDialog()),
+  );
+}
+
+class MusicImportBar extends StatelessWidget {
+  const MusicImportBar({super.key});
+
+  @override
+  Widget build(BuildContext context) => BlocBuilder<ImportCubit, ImportState>(
+    builder: (context, state) {
+      if (!state.busy && state.status.isEmpty && state.error == null) {
+        return const SizedBox.shrink();
+      }
+      final cubit = context.read<ImportCubit>();
+      final theme = Theme.of(context);
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          child: Material(
+            color: theme.colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        state.error != null
+                            ? Icons.error_outline
+                            : state.busy
+                            ? Icons.downloading
+                            : Icons.check_circle_outline,
+                        color: state.error != null
+                            ? theme.colorScheme.error
+                            : theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          state.error != null
+                              ? 'Импорт остановлен'
+                              : state.busy
+                              ? 'Импорт музыки'
+                              : 'Импорт завершён',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Развернуть импорт',
+                        onPressed: () => showMusicImportDialog(context),
+                        icon: const Icon(Icons.open_in_full),
+                      ),
+                      IconButton(
+                        tooltip: state.busy
+                            ? 'Отменить импорт'
+                            : 'Скрыть импорт',
+                        onPressed: state.busy
+                            ? cubit.cancel
+                            : cubit.clearResult,
+                        icon: Icon(state.busy ? Icons.stop : Icons.close),
+                      ),
+                    ],
+                  ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 112),
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        state.error ?? state.status,
+                        style: TextStyle(
+                          color: state.error != null
+                              ? theme.colorScheme.error
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (state.busy) ...[
+                    const SizedBox(height: 10),
+                    const LinearProgressIndicator(),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class MusicImportDialog extends StatefulWidget {
   const MusicImportDialog({super.key});
   @override
@@ -26,26 +125,61 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
   ImportProvider _provider = ImportProvider.youtube;
   String _youtubeBrowser = '';
   Map<String, bool> _tools = {};
-  bool _checking = true;
+  bool _checking = false;
+  bool _forceCheck = false;
+  bool _spotifyPlaylist = false;
   String? _linkError;
   String? _checkError;
 
   @override
   void initState() {
     super.initState();
+    final cubit = context.read<ImportCubit>();
+    final request = cubit.lastRequest;
     _limit.text =
-        '${context.read<ImportCubit>().music.repository.library.importLimit}';
-    unawaited(_checkTools());
+        '${request?.limit ?? cubit.music.repository.library.importLimit}';
+    if (request != null) {
+      _link.text = request.link;
+      _provider = request.provider;
+      _youtubeBrowser = request.youtubeBrowser ?? '';
+      _spotifyPlaylist =
+          request.provider == ImportProvider.spotify &&
+          request.link.contains('/playlist/');
+    }
+    if (cubit.state.busy) {
+      _checking = false;
+    } else {
+      unawaited(_checkTools());
+    }
   }
 
-  Future<void> _checkTools() async {
+  Future<void> _checkTools({bool force = false}) async {
+    _forceCheck |= force;
+    if (_checking) return;
     setState(() {
       _checking = true;
       _checkError = null;
     });
     try {
-      final tools = await context.read<ImportCubit>().checkTools();
-      if (mounted) setState(() => _tools = tools);
+      while (mounted) {
+        final provider = _provider;
+        final spotifyPlaylist = _spotifyPlaylist;
+        final forceCheck = _forceCheck;
+        _forceCheck = false;
+        final tools = await context.read<ImportCubit>().checkTools(
+          provider: provider,
+          spotifyPlaylist: spotifyPlaylist,
+          force: forceCheck,
+        );
+        if (!mounted) return;
+        if (provider != _provider ||
+            spotifyPlaylist != _spotifyPlaylist ||
+            _forceCheck) {
+          continue;
+        }
+        setState(() => _tools = tools);
+        break;
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _checkError = 'Не удалось проверить компоненты');
@@ -56,16 +190,32 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
   }
 
   void _changed(String text) {
+    final needed = requiredImportTools(
+      _provider,
+      spotifyPlaylist: _spotifyPlaylist,
+    ).join(',');
     context.read<ImportCubit>().clearResult();
     setState(() {
       _linkError = null;
+      _spotifyPlaylist = false;
       if (text.trim().isEmpty) return;
       try {
-        _provider = MusicLink.detect(text).provider;
+        final link = MusicLink.detect(text);
+        _provider = link.provider;
+        _spotifyPlaylist =
+            _provider == ImportProvider.spotify &&
+            link.url.contains('/playlist/');
       } on FormatException catch (error) {
         _linkError = error.message;
       }
     });
+    if (needed !=
+        requiredImportTools(
+          _provider,
+          spotifyPlaylist: _spotifyPlaylist,
+        ).join(',')) {
+      unawaited(_checkTools());
+    }
   }
 
   @override
@@ -76,14 +226,22 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => BlocBuilder<ImportCubit, ImportState>(
+  Widget build(BuildContext context) => BlocConsumer<ImportCubit, ImportState>(
+    listenWhen: (previous, current) => previous.busy && !current.busy,
+    listener: (_, _) {
+      if (_tools.isEmpty) unawaited(_checkTools());
+    },
     builder: (context, state) {
       final cubit = context.read<ImportCubit>();
+      final imported = cubit.hasImported(_provider, _link.text);
       final theme = Theme.of(context);
-      final needed = requiredImportTools(_provider);
+      final needed = requiredImportTools(
+        _provider,
+        spotifyPlaylist: _spotifyPlaylist,
+      );
       final ready = !_checking && needed.every((name) => _tools[name] == true);
       return PopScope(
-        canPop: !state.busy,
+        canPop: true,
         child: WaloneDialog(
           title: const Text('Импорт музыки'),
           content: SizedBox(
@@ -145,6 +303,7 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                                   if (_link.text.trim().isEmpty) {
                                     cubit.clearResult();
                                     setState(() => _provider = provider);
+                                    unawaited(_checkTools());
                                   } else {
                                     _changed(_link.text);
                                   }
@@ -274,14 +433,19 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                                   onPressed: state.busy
                                       ? null
                                       : () async {
-                                          await cubit.installTools(_provider);
+                                          await cubit.installTools(
+                                            _provider,
+                                            spotifyPlaylist: _spotifyPlaylist,
+                                          );
                                           if (mounted) await _checkTools();
                                         },
                                   icon: const Icon(Icons.download),
                                   label: const Text('Скачать недостающее'),
                                 ),
                               TextButton.icon(
-                                onPressed: state.busy ? null : _checkTools,
+                                onPressed: state.busy || _checking
+                                    ? null
+                                    : () => _checkTools(force: true),
                                 icon: const Icon(Icons.refresh),
                                 label: const Text('Проверить снова'),
                               ),
@@ -305,6 +469,10 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                       ],
                     ),
                   ),
+                  if (imported) ...[
+                    const SizedBox(height: 12),
+                    const Text('Эта ссылка уже импортирована.'),
+                  ],
                   if (state.busy) ...[
                     const SizedBox(height: 16),
                     const LinearProgressIndicator(),
@@ -331,12 +499,13 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                 child: const Text('Отменить'),
               ),
             OutlinedButton(
-              onPressed: state.busy ? null : () => Navigator.pop(context),
-              child: const Text('Закрыть'),
+              onPressed: () => Navigator.pop(context),
+              child: Text(state.busy ? 'Свернуть' : 'Закрыть'),
             ),
             FilledButton.icon(
               onPressed:
                   state.busy ||
+                      imported ||
                       !ready ||
                       _link.text.trim().isEmpty ||
                       _linkError != null
@@ -349,6 +518,7 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                         );
                         return;
                       }
+                      final navigator = Navigator.of(context);
                       cubit.remote(
                         _provider,
                         _link.text,
@@ -357,7 +527,7 @@ class _MusicImportDialogState extends State<MusicImportDialog> {
                             ? null
                             : _youtubeBrowser,
                         chooseArtist: (name, matches) => showDialog<String>(
-                          context: context,
+                          context: navigator.context,
                           barrierDismissible: false,
                           builder: (_) =>
                               ArtistMatchDialog(name: name, matches: matches),

@@ -11,8 +11,13 @@ class ImportCancelled implements Exception {
   String toString() => 'Импорт отменён. Уже добавленные треки сохранены.';
 }
 
+class YoutubeAccessRequired extends StateError {
+  YoutubeAccessRequired(super.message);
+}
+
 class MusicProcess {
   Process? _process;
+  void Function()? _stop;
   bool cancelled = false;
   void check() {
     if (cancelled) throw ImportCancelled();
@@ -20,10 +25,45 @@ class MusicProcess {
 
   void cancel() {
     cancelled = true;
-    _process?.kill();
+    _stop?.call();
   }
 
-  static Future<String> executable(String name) async {
+  // PyInstaller запускает дочерний процесс, который тоже держит stdout/stderr.
+  static Future<void> _killTree(Process process) async {
+    if (Platform.isWindows) {
+      await Process.run('taskkill', ['/PID', '${process.pid}', '/T', '/F']);
+      process.kill();
+      return;
+    }
+    final descendants = <int>[];
+    Future<void> collect(int pid) async {
+      final result = await Process.run('/usr/bin/pgrep', ['-P', '$pid']);
+      for (final line in '${result.stdout}'.trim().split('\n')) {
+        final child = int.tryParse(line);
+        if (child == null) continue;
+        descendants.add(child);
+        await collect(child);
+      }
+    }
+
+    try {
+      await collect(process.pid);
+    } finally {
+      for (final pid in descendants.reversed) {
+        Process.killPid(pid, ProcessSignal.sigkill);
+      }
+      process.kill(ProcessSignal.sigkill);
+    }
+  }
+
+  // Успешная проверка живёт в памяти до изменения файла или ручного обновления.
+  static final _verifiedExecutables = <String, FileStat>{};
+
+  static Future<String> executable(
+    String name, {
+    MusicProcess? worker,
+    bool force = false,
+  }) async {
     final env = Platform.environment;
     final home = env[Platform.isWindows ? 'USERPROFILE' : 'HOME'] ?? '';
     final managed = p.join(
@@ -58,10 +98,13 @@ class MusicProcess {
         ),
     ];
     for (final path in paths) {
+      worker?.check();
       if (await File(path).exists()) {
         try {
-          await verify(path, name);
+          await verify(path, name, worker: worker, useCache: !force);
           return path;
+        } on ImportCancelled {
+          rethrow;
         } catch (_) {
           // Пропускаем повреждённый или несовместимый исполняемый файл.
         }
@@ -76,12 +119,29 @@ class MusicProcess {
     String path,
     String name, {
     Duration? timeout,
+    MusicProcess? worker,
+    bool useCache = false,
   }) async {
     // На первом запуске macOS проверяет библиотеки Python-сборок. Проверка
     // после установки должна давать им столько же времени, сколько установщик.
     timeout ??= Platform.isMacOS && (name == 'yt-dlp' || name == 'spotdl')
         ? const Duration(minutes: 2)
         : const Duration(seconds: 15);
+    worker?.check();
+    final key = '$name\u0000$path';
+    final stat = await File(path).stat();
+    final cached = _verifiedExecutables[key];
+    if (useCache &&
+        stat.type == FileSystemEntityType.file &&
+        cached != null &&
+        stat.size == cached.size &&
+        stat.modified == cached.modified &&
+        stat.changed == cached.changed &&
+        stat.mode == cached.mode) {
+      worker?.check();
+      return;
+    }
+    _verifiedExecutables.remove(key);
     final Process process;
     try {
       process = await Process.start(path, [
@@ -93,19 +153,28 @@ class MusicProcess {
         'Проверьте совместимость компонента с вашей системой.',
       );
     }
+    var terminated = false;
+    void terminate() {
+      if (terminated) return;
+      terminated = true;
+      unawaited(_killTree(process));
+    }
+
+    worker?._process = process;
+    worker?._stop = terminate;
+    if (worker?.cancelled == true) terminate();
     final output = process.stdout.transform(utf8.decoder).join();
     final errors = process.stderr.drain<void>();
     var timedOut = false;
     final timer = Timer(timeout, () {
       timedOut = true;
-      process.kill(
-        Platform.isWindows ? ProcessSignal.sigterm : ProcessSignal.sigkill,
-      );
+      terminate();
     });
     try {
       final code = await process.exitCode;
       final version = await output;
       await errors;
+      worker?.check();
       if (timedOut) {
         throw StateError(
           'Проверка $name заняла слишком много времени. Повторите попытку.',
@@ -127,8 +196,13 @@ class MusicProcess {
           throw StateError('Нужен Deno 2.3+ или Node.js 22+');
         }
       }
+      _verifiedExecutables[key] = stat;
     } finally {
       timer.cancel();
+      if (worker?._process == process) {
+        worker?._process = null;
+        worker?._stop = null;
+      }
     }
   }
 
@@ -152,23 +226,19 @@ class MusicProcess {
       throw StateError('Не удалось запустить инструмент импорта');
     }
     _process = process;
-    if (cancelled) process.kill();
     final output = <int>[];
     var exceeded = false;
     var timedOut = false;
     var checking = false;
     var terminated = false;
-    Timer? force;
     void terminate() {
       if (terminated) return;
       terminated = true;
-      process.kill();
-      force = Timer(const Duration(seconds: 2), () {
-        process.kill(
-          Platform.isWindows ? ProcessSignal.sigterm : ProcessSignal.sigkill,
-        );
-      });
+      unawaited(_killTree(process));
     }
+
+    _stop = terminate;
+    if (cancelled) terminate();
 
     final watchdog = Timer.periodic(const Duration(milliseconds: 500), (
       _,
@@ -213,6 +283,7 @@ class MusicProcess {
     var browserCookiesRead = false;
     var youtubeAccountCookies = false;
     var youtubeCookiesExpired = false;
+    var browserCookieKeyUnavailable = false;
     final stderr = process.stderr
         .transform(const Utf8Decoder(allowMalformed: true))
         .listen((text) {
@@ -225,6 +296,9 @@ class MusicProcess {
           youtubeCookiesExpired |= diagnostic.contains(
             'youtube account cookies are no longer valid',
           );
+          browserCookieKeyUnavailable |=
+              diagnostic.contains('find-generic-password failed') ||
+              diagnostic.contains('cannot decrypt v10 cookies: no key found');
           if (diagnostic.length > 16384) {
             diagnostic = diagnostic.substring(diagnostic.length - 16384);
           }
@@ -236,6 +310,13 @@ class MusicProcess {
       await outputDone;
       await errorDone;
       check();
+      if (Platform.isMacOS &&
+          arguments.contains('--cookies-from-browser') &&
+          browserCookieKeyUnavailable) {
+        throw YoutubeAccessRequired(
+          'Не удалось получить ключ расшифровки cookies из Связки ключей macOS. Выберите другой браузер, в котором выполнен вход в YouTube, или восстановите доступ к ключу выбранного браузера в Связке ключей.',
+        );
+      }
       if (code != 0 || exceeded) {
         if (diagnostic.contains('impersonate target') &&
             diagnostic.contains('not available')) {
@@ -244,7 +325,7 @@ class MusicProcess {
           );
         }
         if (youtubeCookiesExpired) {
-          throw StateError(
+          throw YoutubeAccessRequired(
             'Сессия YouTube в браузере истекла. Войдите в YouTube заново в выбранном браузере и повторите импорт.',
           );
         }
@@ -252,7 +333,7 @@ class MusicProcess {
             diagnostic.contains('cookie') &&
             (diagnostic.contains('operation not permitted') ||
                 diagnostic.contains('permission denied'))) {
-          throw StateError(
+          throw YoutubeAccessRequired(
             'macOS запретила доступ к cookies браузера. Разрешите Walone доступ в «Системные настройки → Конфиденциальность и безопасность → Полный доступ к диску», затем полностью завершите Walone и откройте снова.',
           );
         }
@@ -263,23 +344,23 @@ class MusicProcess {
                 diagnostic.contains('cookies database') ||
             diagnostic.contains('operation not permitted') &&
                 diagnostic.contains('cookie')) {
-          throw StateError(
+          throw YoutubeAccessRequired(
             'Не удалось прочитать cookies браузера. Закройте браузер и повторите или выберите другой браузер, в котором открыт YouTube.',
           );
         }
         if (diagnostic.contains('not a bot')) {
           final usesBrowser = arguments.contains('--cookies-from-browser');
           if (usesBrowser && youtubeAccountCookies) {
-            throw StateError(
+            throw YoutubeAccessRequired(
               'YouTube отклонил запрос с cookies, хотя вход в аккаунт распознан. Проверка в браузере не разрешила этот запрос. Проверьте, что браузер и Walone используют одну сеть, или повторите позже.',
             );
           }
           if (usesBrowser && browserCookiesRead) {
-            throw StateError(
+            throw YoutubeAccessRequired(
               'В cookies выбранного браузера не найдена активная сессия YouTube. Войдите в YouTube в обычном окне этого браузера и повторите импорт. Приватное окно использует отдельную сессию.',
             );
           }
-          throw StateError(
+          throw YoutubeAccessRequired(
             'YouTube запросил проверку «не бот». Откройте видео в браузере, войдите и пройдите проверку. Затем выберите этот браузер в окне импорта и повторите. Если не помогло, попробуйте позже или другую сеть.',
           );
         }
@@ -298,10 +379,12 @@ class MusicProcess {
     } finally {
       watchdog.cancel();
       deadline.cancel();
-      force?.cancel();
       await stdout.cancel();
       await stderr.cancel();
-      if (identical(_process, process)) _process = null;
+      if (identical(_process, process)) {
+        _process = null;
+        _stop = null;
+      }
     }
   }
 }

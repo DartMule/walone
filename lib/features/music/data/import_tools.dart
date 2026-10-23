@@ -11,12 +11,15 @@ import '../../../core/storage.dart';
 import '../domain/import.dart';
 import 'music_process.dart';
 
-List<String> requiredImportTools(ImportProvider provider) => [
+List<String> requiredImportTools(
+  ImportProvider provider, {
+  bool spotifyPlaylist = false,
+}) => [
   'ffmpeg',
   if (provider != ImportProvider.vk) 'yt-dlp',
   if (provider == ImportProvider.youtube || provider == ImportProvider.spotify)
     'javascript',
-  if (provider == ImportProvider.spotify) 'spotdl',
+  if (provider == ImportProvider.spotify && !spotifyPlaylist) 'spotdl',
 ];
 
 /// Инструменты хранятся отдельно от медиатеки и системных программ.
@@ -241,6 +244,7 @@ class ImportTools {
       await MusicProcess.verify(
         binary.path,
         tool,
+        worker: worker,
         timeout: const Duration(minutes: 2),
       );
       worker.check();
@@ -301,6 +305,7 @@ class ImportTools {
       await MusicProcess.verify(
         p.join(pending.path, 'yt-dlp_macos'),
         'yt-dlp',
+        worker: worker,
         timeout: const Duration(minutes: 2),
       );
       worker.check();
@@ -314,6 +319,7 @@ class ImportTools {
         await MusicProcess.verify(
           p.join(target.path, 'yt-dlp_macos'),
           'yt-dlp',
+          worker: worker,
           timeout: const Duration(minutes: 2),
         );
         worker.check();

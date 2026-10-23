@@ -418,13 +418,7 @@ class MusicPageState extends State<MusicPage> {
                             label: const Text('Добавить файлы'),
                           ),
                           OutlinedButton.icon(
-                            onPressed: () => showDialog<void>(
-                              context: context,
-                              builder: (_) => BlocProvider.value(
-                                value: importer,
-                                child: const MusicImportDialog(),
-                              ),
-                            ),
+                            onPressed: () => showMusicImportDialog(context),
                             icon: const Icon(Icons.link),
                             label: const Text('Импорт по ссылке'),
                           ),
@@ -561,26 +555,6 @@ class MusicPageState extends State<MusicPage> {
                             color: Theme.of(context).colorScheme.error,
                           ),
                         ),
-                      BlocBuilder<ImportCubit, ImportState>(
-                        builder: (context, state) => Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (state.busy) const LinearProgressIndicator(),
-                            if (state.status.isNotEmpty || state.error != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: SelectableText(
-                                  state.error ?? state.status,
-                                ),
-                              ),
-                            if (state.busy)
-                              TextButton(
-                                onPressed: importer.cancel,
-                                child: const Text('Отменить операцию'),
-                              ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),

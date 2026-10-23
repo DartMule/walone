@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../data/music_process.dart';
 import '../data/import_tools.dart';
 import '../data/vk_session.dart';
+import '../data/spotify_catalog.dart';
 import '../domain/import.dart';
 import '../domain/music.dart';
 import 'music_cubit.dart';
@@ -24,11 +25,40 @@ class ImportCubit extends Cubit<ImportState> {
   ImportCubit(
     this.music,
     this.vk, {
-    this.toolFinder = MusicProcess.executable,
+    this.toolFinder,
+    this.spotifyPlaylistLoader = SpotifyCatalog.playlist,
     this.workerFactory = MusicProcess.new,
     this.toolInstaller = ImportTools.install,
   }) : super(const ImportState());
-  final Future<String> Function(String) toolFinder;
+  final Future<List<Map<String, dynamic>>> Function(
+    MusicLink,
+    MusicProcess,
+    int,
+    void Function(String),
+  )
+  spotifyPlaylistLoader;
+  final Future<String> Function(String)? toolFinder;
+  Future<String> _findTool(String name, {bool force = false}) async {
+    _worker?.check();
+    final result =
+        await (toolFinder?.call(name) ??
+            MusicProcess.executable(name, worker: _worker, force: force));
+    _worker?.check();
+    return result;
+  }
+
+  final _completedLinks = <String>{};
+  ({ImportProvider provider, String link, int limit, String? youtubeBrowser})?
+  lastRequest;
+  bool hasImported(ImportProvider provider, String text) {
+    if (provider != ImportProvider.spotify) return false;
+    try {
+      return _completedLinks.contains(MusicLink.parse(provider, text).url);
+    } on FormatException {
+      return false;
+    }
+  }
+
   final MusicProcess Function() workerFactory;
   final Future<void> Function(
     String,
@@ -38,31 +68,52 @@ class ImportCubit extends Cubit<ImportState> {
   )
   toolInstaller;
 
-  Future<Map<String, bool>> checkTools() async {
-    final found = <String, bool>{};
-    for (final name in ['ffmpeg', 'yt-dlp', 'deno', 'node', 'spotdl']) {
+  Future<Map<String, bool>> checkTools({
+    ImportProvider? provider,
+    bool spotifyPlaylist = false,
+    bool force = false,
+  }) async {
+    Future<bool> available(String name) async {
       try {
-        await toolFinder(name);
-        found[name] = true;
+        await _findTool(name, force: force);
+        return true;
+      } on ImportCancelled {
+        rethrow;
       } catch (_) {
-        found[name] = false;
+        return false;
       }
     }
-    return {
-      'ffmpeg': found['ffmpeg']!,
-      'yt-dlp': found['yt-dlp']!,
-      'spotdl': found['spotdl']!,
-      'javascript': found['deno']! || found['node']!,
+
+    final found = {
+      'ffmpeg': false,
+      'yt-dlp': false,
+      'javascript': false,
+      'spotdl': false,
     };
+    final needed = provider == null
+        ? ['ffmpeg', 'yt-dlp', 'javascript', if (!spotifyPlaylist) 'spotdl']
+        : requiredImportTools(provider, spotifyPlaylist: spotifyPlaylist);
+    for (final name in needed) {
+      found[name] = name == 'javascript'
+          ? await available('deno') || await available('node')
+          : await available(name);
+    }
+    return found;
   }
 
-  Future<void> installTools(ImportProvider provider) => _run((
-    worker,
-    root,
-  ) async {
-    final tools = await checkTools();
+  Future<void> installTools(
+    ImportProvider provider, {
+    bool spotifyPlaylist = false,
+  }) => _run((worker, root) async {
+    final tools = await checkTools(
+      provider: provider,
+      spotifyPlaylist: spotifyPlaylist,
+    );
     final errors = <String, String>{};
-    for (final name in requiredImportTools(provider)) {
+    for (final name in requiredImportTools(
+      provider,
+      spotifyPlaylist: spotifyPlaylist,
+    )) {
       worker.check();
       if (tools[name]!) continue;
       try {
@@ -74,10 +125,14 @@ class ImportCubit extends Cubit<ImportState> {
         errors[name] = error is StateError ? error.message : '$error';
       }
     }
-    final checked = await checkTools();
-    final missing = requiredImportTools(provider)
-        .where((name) => !checked[name]!)
-        .toList();
+    final checked = await checkTools(
+      provider: provider,
+      spotifyPlaylist: spotifyPlaylist,
+    );
+    final missing = requiredImportTools(
+      provider,
+      spotifyPlaylist: spotifyPlaylist,
+    ).where((name) => !checked[name]!).toList();
     if (missing.isNotEmpty) {
       throw StateError(
         'Не удалось подготовить компоненты:\n'
@@ -138,6 +193,7 @@ class ImportCubit extends Cubit<ImportState> {
       try {
         directory = await Directory.systemTemp.createTemp('walone-import-');
         final message = await action(worker, directory);
+        worker.check();
         if (!isClosed) emit(ImportState(status: message));
       } catch (error) {
         if (!isClosed) {
@@ -267,10 +323,19 @@ class ImportCubit extends Cubit<ImportState> {
       'utf-8',
     ];
     var runtimeFound = false;
-    for (final name in ['deno', 'node']) {
+    for (final name in [
+      if (provider == ImportProvider.youtube ||
+          provider == ImportProvider.spotify) ...[
+        'deno',
+        'node',
+      ],
+    ]) {
       try {
-        args.addAll(['--js-runtimes', '$name:${await toolFinder(name)}']);
+        args.addAll(['--js-runtimes', '$name:${await _findTool(name)}']);
         runtimeFound = true;
+        break;
+      } on ImportCancelled {
+        rethrow;
       } catch (_) {
         /* Другой runtime может быть установлен. */
       }
@@ -485,7 +550,7 @@ class ImportCubit extends Cubit<ImportState> {
     root,
   ) async {
     final sections = AudioSection.parse(text, track.duration);
-    final ffmpeg = await toolFinder('ffmpeg');
+    final ffmpeg = await _findTool('ffmpeg');
     final prepared = <MusicTrack>[];
     try {
       for (var i = 0; i < sections.length; i++) {
@@ -553,11 +618,17 @@ class ImportCubit extends Cubit<ImportState> {
     String? youtubeBrowser,
     Future<String?> Function(String, List<String>)? chooseArtist,
   }) {
-    if (state.busy) return Future.value();
+    if (state.busy || hasImported(provider, text)) return Future.value();
     if (limit < 0 || limit > 100000) {
       emit(const ImportState(error: 'Лимит должен быть от 0 до 100000'));
       return Future.value();
     }
+    lastRequest = (
+      provider: provider,
+      link: text,
+      limit: limit,
+      youtubeBrowser: youtubeBrowser,
+    );
     _chooseArtist = chooseArtist;
     _artistChoices.clear();
     final destination = music.repository.library.selectedID;
@@ -566,18 +637,18 @@ class ImportCubit extends Cubit<ImportState> {
       if (provider == ImportProvider.vk) {
         try {
           final link = MusicLink.parse(provider, text);
-          final ffmpeg = await toolFinder('ffmpeg');
+          final ffmpeg = await _findTool('ffmpeg');
           return await _vk(link, destination, worker, root, ffmpeg, limit);
         } finally {
           vk.release();
         }
       }
       final link = MusicLink.parse(provider, text);
-      final ffmpeg = await toolFinder('ffmpeg');
-      final tool = await toolFinder('yt-dlp');
+      final ffmpeg = await _findTool('ffmpeg');
+      final tool = await _findTool('yt-dlp');
       final args = await _arguments(provider, youtubeBrowser);
       if (provider == ImportProvider.spotify) {
-        return _spotify(
+        final message = await _spotify(
           link,
           destination,
           worker,
@@ -587,6 +658,9 @@ class ImportCubit extends Cubit<ImportState> {
           ffmpeg,
           limit,
         );
+        worker.check();
+        _completedLinks.add(link.url);
+        return message;
       }
       _status('Получаем список и разметку…');
       final metadata = await _metadata(
@@ -737,7 +811,9 @@ class ImportCubit extends Cubit<ImportState> {
     Object? lastError;
     for (var i = 0; i < entries.length; i++) {
       worker.check();
-      _status('$label: ${i + 1} из ${entries.length}');
+      if (link.provider != ImportProvider.spotify) {
+        _status('$label: ${i + 1} из ${entries.length}');
+      }
       final row = entries[i];
       final youtube = link.provider != ImportProvider.soundcloud;
       if (row is! Map<String, dynamic> ||
@@ -797,6 +873,8 @@ class ImportCubit extends Cubit<ImportState> {
         }
       } on ImportCancelled {
         rethrow;
+      } on YoutubeAccessRequired {
+        rethrow;
       } catch (error) {
         worker.check();
         lastError = error;
@@ -836,39 +914,52 @@ class ImportCubit extends Cubit<ImportState> {
     String ffmpeg,
     int limit,
   ) async {
-    _status('Получаем названия и исполнителей Spotify…');
-    final file = File(p.join(root.path, 'tracks.spotdl'));
-    await worker.run(
-      await toolFinder('spotdl'),
-      [
-        'save',
-        link.url,
-        '--save-file',
-        file.path,
-        '--threads',
-        '1',
-        '--headless',
-        '--lyrics',
-        '--ffmpeg',
-        ffmpeg,
-      ],
-      root,
-      timeout: const Duration(minutes: 15),
-    );
-    if (await file.length() > 16 * 1024 * 1024) {
-      throw StateError('Список Spotify превышает 16 МиБ');
-    }
-    final data = jsonDecode(await file.readAsString());
-    if (data is! List || data.isEmpty) {
-      throw StateError('Spotify не вернул список треков');
+    final List<dynamic> data;
+    if (link.url.contains('/playlist/')) {
+      data = await spotifyPlaylistLoader(link, worker, limit, _status);
+    } else {
+      _status('Проверяем компонент Spotify…');
+      final spotdl = await _findTool('spotdl');
+      _status('Получаем названия и исполнителей Spotify…');
+      final file = File(p.join(root.path, 'tracks.spotdl'));
+      await worker.run(
+        spotdl,
+        [
+          'save',
+          link.url,
+          '--save-file',
+          file.path,
+          '--threads',
+          '1',
+          '--headless',
+          '--max-retries',
+          '1',
+          '--lyrics',
+          '--ffmpeg',
+          ffmpeg,
+        ],
+        root,
+        timeout: const Duration(minutes: 2),
+      );
+      if (await file.length() > 16 * 1024 * 1024) {
+        throw StateError('Список Spotify превышает 16 МиБ');
+      }
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is! List || decoded.isEmpty) {
+        throw StateError('Spotify не вернул список треков');
+      }
+      data = decoded;
     }
     final songs = limit == 0 ? data : data.take(limit).toList();
     var added = 0, skipped = 0;
     Object? lastError;
     String? playlistID = link.playlist ? null : destination;
+    String progress(int i) =>
+        'Spotify: трек ${i + 1} из ${songs.length}. '
+        'Добавлено: $added. Пропущено: $skipped.';
     for (var i = 0; i < songs.length; i++) {
       worker.check();
-      _status('Spotify: поиск ${i + 1} из ${songs.length} на YouTube…');
+      _status('${progress(i)}\nИщем совпадение на YouTube…');
       final song = songs[i];
       if (song is! Map<String, dynamic> ||
           song['name'] is! String ||
@@ -909,6 +1000,7 @@ class ImportCubit extends Cubit<ImportState> {
           skipped++;
           continue;
         }
+        _status('${progress(i)}\nЗагружаем и сохраняем аудио…');
         await _onlineEntries(
           MusicLink(
             provider: ImportProvider.spotify,
@@ -936,6 +1028,11 @@ class ImportCubit extends Cubit<ImportState> {
         added++;
       } on ImportCancelled {
         rethrow;
+      } on YoutubeAccessRequired catch (error) {
+        throw YoutubeAccessRequired(
+          '${error.message}\n${progress(i)}'
+          '${added > 0 ? '\nУже добавленные треки сохранены в плейлисте.' : ''}',
+        );
       } catch (error) {
         worker.check();
         lastError = error;

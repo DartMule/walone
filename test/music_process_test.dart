@@ -8,6 +8,67 @@ import 'package:walone/core/storage.dart';
 import 'package:walone/features/music/data/music_process.dart';
 
 void main() {
+  for (final cancel in [true, false]) {
+    test('Остановка завершает дочерний процесс: отмена=$cancel', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'walone-process-tree-',
+      );
+      final worker = MusicProcess();
+      final childFile = File('${root.path}/child');
+      int? child;
+      try {
+        final task = worker.run(
+          '/bin/sh',
+          ['-c', "trap 'exit 0' TERM; /bin/sleep 30 & echo \$! > child; wait"],
+          root,
+          timeout: cancel
+              ? const Duration(seconds: 30)
+              : const Duration(seconds: 1),
+        );
+        final result = expectLater(
+          task.timeout(const Duration(seconds: 4)),
+          throwsA(cancel ? isA<ImportCancelled>() : isA<StateError>()),
+        );
+        while (!await childFile.exists() ||
+            (await childFile.readAsString()).trim().isEmpty) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        child = int.parse((await childFile.readAsString()).trim());
+        if (cancel) worker.cancel();
+        await result;
+      } finally {
+        if (child != null) Process.killPid(child, ProcessSignal.sigkill);
+        worker.cancel();
+        await root.delete(recursive: true);
+      }
+    }, skip: !Platform.isMacOS);
+  }
+
+  test('Проверка версии инструмента отменяется вместе с импортом', () async {
+    final root = await Directory.systemTemp.createTemp('walone-verify-cancel-');
+    final worker = MusicProcess();
+    try {
+      final tool = File('${root.path}/tool');
+      await tool.writeAsString(
+        '#!/bin/sh\necho ready > "${root.path}/started"\nexec /bin/sleep 30\n',
+      );
+      await Process.run('/bin/chmod', ['700', tool.path]);
+      final task = MusicProcess.verify(tool.path, 'spotdl', worker: worker);
+      final result = expectLater(
+        task.timeout(const Duration(seconds: 4)),
+        throwsA(isA<ImportCancelled>()),
+      );
+      while (!await File('${root.path}/started').exists()) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      worker.cancel();
+      await result;
+    } finally {
+      worker.cancel();
+      await root.delete(recursive: true);
+    }
+  }, skip: !Platform.isMacOS);
+
   test('Полный runtime yt-dlp обнаруживается раньше старой сборки', () async {
     final binding = TestWidgetsFlutterBinding.ensureInitialized();
     const channel = MethodChannel('plugins.flutter.io/path_provider');
@@ -55,7 +116,129 @@ void main() {
     }
   }, skip: !Platform.isMacOS);
 
+  test('Повторный поиск проверяет версию только после изменения файла', () async {
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
+    const channel = MethodChannel('plugins.flutter.io/path_provider');
+    final root = await Directory.systemTemp.createTemp('walone-tool-cache-');
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (_) async => root.path,
+    );
+    try {
+      final tool = File(
+        p.join(
+          (await JsonStore.applicationDirectory()).path,
+          'ImportTools',
+          'ffmpeg',
+        ),
+      );
+      final calls = File(p.join(root.path, 'calls'));
+      await tool.parent.create(recursive: true);
+      Future<void> writeTool(String version) async {
+        await tool.writeAsString(
+          '#!/bin/sh\necho run >> "${calls.path}"\n/bin/sleep 0.1\necho $version\n',
+        );
+        await Process.run('/bin/chmod', ['700', tool.path]);
+      }
+
+      await writeTool('version-one');
+      final first = Stopwatch()..start();
+      expect(await MusicProcess.executable('ffmpeg'), tool.path);
+      first.stop();
+      final repeated = Stopwatch()..start();
+      expect(await MusicProcess.executable('ffmpeg'), tool.path);
+      repeated.stop();
+      expect(await calls.readAsLines(), hasLength(1));
+      await writeTool('version-two-changed');
+      expect(await MusicProcess.executable('ffmpeg'), tool.path);
+      expect(await calls.readAsLines(), hasLength(2));
+      expect(await MusicProcess.executable('ffmpeg', force: true), tool.path);
+      expect(await calls.readAsLines(), hasLength(3));
+      final cancelled = MusicProcess()..cancel();
+      await expectLater(
+        MusicProcess.executable('ffmpeg', worker: cancelled),
+        throwsA(isA<ImportCancelled>()),
+      );
+      expect(await calls.readAsLines(), hasLength(3));
+      await Process.run('/bin/chmod', ['600', tool.path]);
+      await expectLater(
+        MusicProcess.verify(tool.path, 'ffmpeg', useCache: true),
+        throwsStateError,
+      );
+      await Process.run('/bin/chmod', ['700', tool.path]);
+      expect(await MusicProcess.executable('ffmpeg'), tool.path);
+      expect(await calls.readAsLines(), hasLength(4));
+      await tool.delete();
+      await expectLater(
+        MusicProcess.verify(tool.path, 'ffmpeg', useCache: true),
+        throwsStateError,
+      );
+      stdout.writeln(
+        'Tool verification: first=${first.elapsedMilliseconds}ms, repeated=${repeated.elapsedMilliseconds}ms',
+      );
+    } finally {
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+      await root.delete(recursive: true);
+    }
+  }, skip: Platform.isWindows);
+
+  test(
+    'Замер установленных компонентов без сети',
+    () async {
+      final binding = TestWidgetsFlutterBinding.ensureInitialized();
+      const channel = MethodChannel('plugins.flutter.io/path_provider');
+      final support = p.join(
+        Platform.environment['HOME']!,
+        'Library',
+        'Application Support',
+        'dev.soyjanks.walone.flutter',
+      );
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        (_) async => support,
+      );
+      try {
+        final timings = <int>[];
+        for (var pass = 0; pass < 2; pass++) {
+          final watch = Stopwatch()..start();
+          for (final name in ['ffmpeg', 'yt-dlp', 'node']) {
+            await MusicProcess.executable(name);
+          }
+          timings.add(watch.elapsedMilliseconds);
+        }
+        stdout.writeln(
+          'Installed tools: first=${timings[0]}ms, repeated=${timings[1]}ms',
+        );
+      } finally {
+        binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+      }
+    },
+    skip:
+        !Platform.isMacOS ||
+        !const bool.fromEnvironment('VERIFY_INSTALLED_IMPORT_TOOLS'),
+  );
+
   for (final sample in [
+    (
+      'WARNING: find-generic-password failed\nWARNING: cannot decrypt v10 cookies: no key found\nERROR: Sign in to confirm you are not a bot.',
+      'Связки ключей macOS',
+    ),
+    (
+      'WARNING: find-generic-password failed\n${'debug\n' * 4000}ERROR: Sign in to confirm you are not a bot.',
+      'Связки ключей macOS',
+    ),
+    (
+      'ERROR: Could not find Chrome cookies database in private-profile',
+      'Не удалось прочитать cookies браузера',
+    ),
+    (
+      'ERROR: Could not copy Chrome cookie database',
+      'Не удалось прочитать cookies браузера',
+    ),
+    (
+      'ERROR: Failed to decrypt cookies with Keychain',
+      'Не удалось прочитать cookies браузера',
+    ),
     (
       'WARNING: The provided YouTube account cookies are no longer valid.\nERROR: Sign in to confirm you are not a bot.',
       'Сессия YouTube в браузере истекла',
@@ -93,7 +276,7 @@ void main() {
             'firefox',
           ], root),
           throwsA(
-            isA<StateError>()
+            isA<YoutubeAccessRequired>()
                 .having((e) => e.message, 'причина', contains(sample.$2))
                 .having(
                   (e) => e.message,
